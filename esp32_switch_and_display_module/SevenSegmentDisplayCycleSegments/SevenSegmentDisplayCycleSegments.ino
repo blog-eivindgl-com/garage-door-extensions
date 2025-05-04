@@ -4,17 +4,24 @@ const int ButtonPin = 15;
 volatile bool buttonState = false;
 volatile bool buttonStateChanged = false;
 
-const int TopSegment = 19;  // Top segment
-const int UpperRightSegment = 21;  // Upper Right segment
+const int TopSegment = 18;  // Top segment
+const int UpperRightSegment = 12;  // Upper Right segment
 const int LowerRightSegment = 16;  // Lower Right segment
-const int DecimalPointSegment = 17;  // Decimal point segment
+const int DecimalPointSegment = 13;  // Decimal point segment
 const int BottomSegment = 4;  // Bottom segment
 const int LowerLeftSegment = 2;  // Lower Left segment
-const int UpperLeftSegment = 18;  // Upper Left segment
-const int CenterSegment = 5;  // Center segment
+const int UpperLeftSegment = 19;  // Upper Left segment
+const int CenterSegment = 17;  // Center segment
+
+const int Digit_Ones = 23;  // Set value to the right-most of 4 digits, representing the ones
+const int Digit_Tens = 22;  // Set value to the second right-most of 4 digits, representing the tens
+const int Digit_Hundreds = 21; // Set value to the third right-most of 4 digits, representing the hundreds
+const int Digit_Thousands = 5; // Set value to the fourth right-most of 4 digits, representing the thousands
 
 const std::vector<int> AllLedSegmentPins = { TopSegment, UpperRightSegment, LowerRightSegment, DecimalPointSegment, BottomSegment, LowerLeftSegment, UpperLeftSegment, CenterSegment };
-const std::vector<int> DisplayNothing;
+const std::vector<int> DigitPins = { Digit_Ones, Digit_Tens, Digit_Hundreds, Digit_Thousands };
+int currentDigit = 0;
+int previousDigit = 0;
 int currentSegment = 0;
 int previousSegment = 0;
 
@@ -40,6 +47,30 @@ void cycleDisplayDigit() {
 
   if (currentSegment > 7) {
     currentSegment = 0;
+    currentDigit++;
+  }
+
+  if (currentDigit > 3) {
+    currentDigit = 0;  // Start over from the right-most digit again
+  }
+
+  char* digitDescription = "";
+  switch (currentDigit) {
+    case 0:
+      digitDescription = "Ones";
+      break;
+    case 1:
+      digitDescription = "Tens";
+      break;
+    case 2:
+      digitDescription = "Hundreds";
+      break;
+    case 3:
+      digitDescription = "Thousands";
+      break;
+    default:
+      Serial.println("Unknown digit");
+      break;
   }
 
   char* segmentDescription = "";
@@ -73,10 +104,29 @@ void cycleDisplayDigit() {
       break;
   }
 
-  Serial.printf("Updating display to digit %s\n", segmentDescription);
+  Serial.printf("Updating display to display %s segment in digit %s\n", segmentDescription, digitDescription);
 }
 
 void updateDisplay() {
+  int digit = -1;
+  switch (currentDigit) {
+    case 0:
+      digit = Digit_Ones;
+      break;
+    case 1:
+      digit = Digit_Tens;
+      break;
+    case 2:
+      digit = Digit_Hundreds;
+      break;
+    case 3:
+      digit = Digit_Thousands;
+      break;
+    default:
+      Serial.println("Unknown digit");
+      break;
+  }
+
   int segment = -1;
   switch (currentSegment) {
     case 0:
@@ -108,17 +158,25 @@ void updateDisplay() {
       break;
   }
 
-  if (currentSegment == previousSegment) {
+  if (currentSegment == previousSegment && currentDigit == previousDigit) {
     // Display hasn't changed
     return;
   }
 
-  // turn all segments off
-  for (int i = 0; i < AllLedSegmentPins.size(); i++ ) { 
-    digitalWrite(AllLedSegmentPins[i], HIGH);
+  // Turn all segments off digit by digit
+  for (int i = 0; i < DigitPins.size(); i++) {
+    digitalWrite(DigitPins[i], LOW);
+
+    for (int j = 0; j < AllLedSegmentPins.size(); j++) { 
+      digitalWrite(AllLedSegmentPins[j], HIGH);
+    }
   }
 
+  // Turn on the current segment on the current digit
+  Serial.printf("Digit pin that will be set HIGH: %d\n", digit);
+  digitalWrite(digit, HIGH);
   digitalWrite(segment, LOW);
+  previousDigit = currentDigit;
   previousSegment = currentSegment;
 }
 
@@ -127,6 +185,9 @@ void setup() {
 
   // Setup all LED segment pins for output
   Serial.println("Assigning LED segment pins...");
+  for (int i = 0; i < DigitPins.size(); i++) {
+    pinMode(DigitPins[i], OUTPUT);
+  }
   for (int i = 0; i < AllLedSegmentPins.size(); i++) {
     pinMode(AllLedSegmentPins[i], OUTPUT);
   }
