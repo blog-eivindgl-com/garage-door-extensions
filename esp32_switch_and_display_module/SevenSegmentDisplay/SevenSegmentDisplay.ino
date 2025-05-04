@@ -5,20 +5,25 @@ const int ButtonPin = 15;
 volatile bool buttonState = false;
 volatile bool buttonStateChanged = false;
 
+const DigitPins digitPins = {
+  .onesDigit = 23,
+  .tensDigit = 22,
+  .hundredsDigit = 21,
+  .thousandsDigit = 5
+};
 const SegmentPins segmentPins = {
-  .top = 19,
-  .upperRight = 21,
+  .top = 18,
+  .upperRight = 12,
   .lowerRight = 16,
-  .decimalPoint = 17,
+  .decimalPoint = 13,
   .bottom = 4,
   .lowerLeft = 2,
-  .upperLeft = 18,
-  .center = 5
+  .upperLeft = 19,
+  .center = 17
 };
-SevenSegmentDisplay display(segmentPins);
+SevenSegmentDisplay display(digitPins, segmentPins);
 
 int currentDisplayDigit = -1;
-int previousDisplayDigit = 0;
 
 void IRAM_ATTR handleButtonInterrupt() {
   if (digitalRead(ButtonPin) == LOW) {
@@ -40,7 +45,7 @@ void checkButtonState() {
 void cycleDisplayDigit() {
   currentDisplayDigit++;
 
-  if (currentDisplayDigit > 9) {
+  if (currentDisplayDigit > 9999) {
     currentDisplayDigit = 0;
   }
 
@@ -58,11 +63,17 @@ void setup() {
   attachInterrupt(ButtonPin, handleButtonInterrupt, CHANGE);
 
   Serial.println("Ready to display");
+  currentDisplayDigit = 9995;
 }
 
 void loop() {
-  checkButtonState();
-  display.updateDisplay(currentDisplayDigit);
+  static unsigned long lastUpdateTime = 0;
 
-  delay(100);
+  checkButtonState();  // Handle button state without affecting display refresh
+
+  // Ensure display refresh happens ~every 5ms
+  if (millis() - lastUpdateTime >= 5) {
+    display.updateDisplay(currentDisplayDigit);
+    lastUpdateTime = millis();  // Reset timing
+  }
 }
