@@ -33,11 +33,17 @@ void checkDoorSensorState() {
   // Report new state if it has actually changed
   if (doorSensorStateChanged && strcmp(doorSensorState, "closed") == 0) {
     Serial.println("Door is closed");
+    // Message for ESP32 display module
     mqttClient.publish("garageDoor/doorStateChanged", "closed");
+    // Message for Home Assitant
+    mqttClient.publish("door/sensor", "CLOSED");
     doorSensorStateChanged = false;
   } else if (doorSensorStateChanged && strcmp(doorSensorState, "open") == 0) {
     Serial.println("Door is opening");
+    // Message for ESP32 display module
     mqttClient.publish("garageDoor/doorStateChanged", "opening");
+    // Message for Home Assitant
+    mqttClient.publish("door/sensor", "OPEN");
     doorSensorStateChanged = false;
   }
 }
@@ -82,6 +88,21 @@ void incomingMqttMessage(char *topic, uint8_t *message, unsigned int length) {
       doorSensorStateChanged = true;
     }
   }
+}
+
+void publishDiscoveryMqttMessage() {
+  String discoveryMessage = "{"
+    "\"name\": \"Garage Door\","
+    "\"unique_id\": \"garage_door_sensor\","
+    "\"state_topic\": \"door/sensor\","
+    "\"payload_on\": \"OPEN\","
+    "\"payload_off\": \"CLOSED\","
+    "\"device_class\": \"door\","
+    "\"icon\": \"mdi:garage\""
+  "}";
+
+  Serial.println("Publishing Home Assistant Binary Sensor Discovery Message");
+  mqttClient.publish("homeassistant/binary_sensor/garage_door_sensor/config", discoveryMessage.c_str(), true); // true means the message is retained when HA is restarted
 }
 
 void reconnectMqttBroker() {
@@ -159,6 +180,9 @@ void setup() {
   if (!mqttClient.connected()) {
     reconnectMqttBroker();
   }
+
+  // Register this device as a door sensor in Home Assistant
+  publishDiscoveryMqttMessage();
 }
 
 void loop() {
