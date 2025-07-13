@@ -1,0 +1,50 @@
+namespace GarageDoorExtensionsBackend.Controllers;
+using GarageDoorExtensionsBackend.Services;
+using Microsoft.AspNetCore.Mvc;
+
+[ApiController]
+[Route("api/[controller]")]
+public class DoorOpeningsController : ApiControllerBase
+{
+    private readonly IDoorOpeningsService _doorOpeningService;
+
+    public DoorOpeningsController(IDoorOpeningsService doorOpeningsService)
+    {
+        _doorOpeningService = doorOpeningsService;
+    }
+
+    [HttpGet("today")]
+    public async Task<IActionResult> GetDoorOpeningsToday()
+    {
+        var openings = await _doorOpeningService.GetDoorOpeningsTodayAsync();
+        return Ok(openings);
+    }
+
+    [HttpGet("week")]
+    public async Task<IActionResult> GetDoorOpeningsThisWeek()
+    {
+        var openings = await _doorOpeningService.GetDoorOpeningsThisWeekAsync();
+        return Ok(openings);
+    }
+
+    [HttpGet("month")]
+    public async Task<IActionResult> GetDoorOpeningsThisMonth()
+    {
+        var openings = await _doorOpeningService.GetDoorOpeningsThisMonthAsync();
+        return Ok(openings);
+    }
+
+    [HttpPost("RegisterDoorOpening")]
+    public async Task<IActionResult> RegisterDoorOpening()
+    {
+        await _doorOpeningService.RegisterDoorOpeningAsync();
+        return NoContent();
+    }
+
+    [HttpPost("RegisterDoorClosing")]
+    public async Task<IActionResult> RegisterDoorClosing()
+    {
+        await _doorOpeningService.RegisterDoorClosingAsync();
+        return NoContent();
+    }
+}

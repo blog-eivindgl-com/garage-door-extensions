@@ -1,0 +1,69 @@
+@page "/dooropenings"
+@attribute [StreamRendering]
+@inject IHttpClientFactory httpClientFactory
+
+
+<PageTitle>Door Openings</PageTitle>
+
+<h1>Door Openings</h1>
+@if (_doorOpeningsToday == null || _doorOpeningsWeek == null || _doorOpeningsMonth == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <div class="row">
+        <div class="col-md-4">
+            <h2>Today's Openings: @_doorOpeningsToday</h2>
+        </div>
+        <div class="col-md-4">
+            <h2>This Week's Openings: @_doorOpeningsWeek</h2>
+        </div>
+        <div class="col-md-4">
+            <h2>This Month's Openings: @_doorOpeningsMonth</h2>
+        </div>
+    </div>
+}
+
+@code {
+    private int? _doorOpeningsToday;
+    private int? _doorOpeningsWeek;
+    private int? _doorOpeningsMonth;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var http = httpClientFactory.CreateClient("DoorOpenings");
+        // Load door openings data
+        var todayResponse = await http.GetAsync("api/dooropenings/today");
+        if (todayResponse.IsSuccessStatusCode)
+        {
+            _doorOpeningsToday = await todayResponse.Content.ReadFromJsonAsync<int>();
+        }
+        else
+        {
+            _doorOpeningsToday = 0;
+        }
+
+        // Load weekly and monthly data
+        var weekResponse = await http.GetAsync("api/dooropenings/week");
+        if (weekResponse.IsSuccessStatusCode)
+        {
+            _doorOpeningsWeek = await weekResponse.Content.ReadFromJsonAsync<int>();
+        } 
+        else
+        {
+            _doorOpeningsWeek = 0;
+        }
+        var monthResponse = await http.GetAsync("api/dooropenings/month");
+        if (monthResponse.IsSuccessStatusCode)
+        {
+            _doorOpeningsMonth = await monthResponse.Content.ReadFromJsonAsync<int>();
+        }
+        else
+        {
+            _doorOpeningsMonth = 0;
+        }
+
+        StateHasChanged();
+    }
+} 
