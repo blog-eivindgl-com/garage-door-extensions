@@ -24,6 +24,12 @@ Accept: application/json
 
 ###
 
+### Get Display Data
+GET {{baseUrl}}{{apiPath}}/display
+Accept: application/json
+
+###
+
 
 ### Get duration of last door opening
 GET {{baseUrl}}{{apiPath}}/openduration

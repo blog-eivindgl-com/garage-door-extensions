@@ -8,6 +8,7 @@ public interface IDoorOpeningsService
     int GetDoorOpeningsToday();
     int GetDoorOpeningsThisWeek();
     int GetDoorOpeningsThisMonth();
+    string GetDisplayData();
     long GetLastDoorOpened();
     long GetLastDoorClosed();
     void RegisterDoorOpening();

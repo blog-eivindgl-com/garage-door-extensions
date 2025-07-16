@@ -83,6 +83,18 @@ public class DoorOpeningsFileSystemService : IDoorOpeningsService
         return doorOpeningsCount;
     }
 
+    public string GetDisplayData()
+    {
+        return $"{{"
+            + $"\"today\": {GetDoorOpeningsToday()}, "
+            + $"\"thisWeek\": {GetDoorOpeningsThisWeek()}, "
+            + $"\"thisMonth\": {GetDoorOpeningsThisMonth()}, "
+            + $"\"lastOpened\": {GetLastDoorOpened()}, "
+            + $"\"lastClosed\": {GetLastDoorClosed()}, "
+            + $"\"openDurationInSeconds\": {GetDoorOpenDurationInSeconds()}"
+            + "}";
+    } 
+
     public void RegisterDoorOpening()
     {
         CommonCreateFile(DoorState.Opened);

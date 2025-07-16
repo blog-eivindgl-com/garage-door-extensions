@@ -35,6 +35,13 @@ public class DoorOpeningsController : ControllerBase
         return Ok(openings);
     }
 
+    [HttpGet("display")]
+    public async Task<IActionResult> GetDisplayData()
+    {
+        var displayData = _doorOpeningService.GetDisplayData();
+        return Ok(displayData);
+    }
+
     [HttpGet("openduration")]
     public async Task<IActionResult> GetDoorOpenDuration()
     {

@@ -29,6 +29,18 @@ public class DoorOpeningsDummyService : IDoorOpeningsService
         return 120; // Mock data
     }
 
+    public string GetDisplayData()
+    {
+        return $"{{"
+            + $"\"today\": {GetDoorOpeningsToday()}, "
+            + $"\"thisWeek\": {GetDoorOpeningsThisWeek()}, "
+            + $"\"thisMonth\": {GetDoorOpeningsThisMonth()}, "
+            + $"\"lastOpened\": {GetLastDoorOpened()}, "
+            + $"\"lastClosed\": {GetLastDoorClosed()}, "
+            + $"\"openDurationInSeconds\": {GetDoorOpenDurationInSeconds()}"
+            + "}";
+    } 
+
     public void RegisterDoorOpening()
     {
         _doorOpenings.Add(_dateTimeService.Now);
