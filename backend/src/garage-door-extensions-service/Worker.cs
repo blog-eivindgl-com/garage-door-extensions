@@ -11,6 +11,7 @@ public class Worker : BackgroundService
     internal const string BackendApiHttpClient = "BackendApi";
     private const string GarageDoorStateChangedTopic = "garageDoor/doorStateChanged";
     private const string GarageDoorDisplayTopic = "garageDoor/display";
+    private const string GarageDoorQueryStateTopic = "garageDoor/queryState";
     private const string AlertTopic = "garageDoor/alert";
     private const string AlertMessageDurationPlaceholder = "{duration}";
     private const string OpeningState = "opening";
@@ -58,7 +59,9 @@ public class Worker : BackgroundService
             .Build();
         _mqttClient.ApplicationMessageReceivedAsync += HandleIncomingMessageAsync;
         _mqttDoorStateSubscribeOptions = mqttFactory.CreateSubscribeOptionsBuilder()
-            .WithTopicFilter(GarageDoorStateChangedTopic).Build();
+            .WithTopicFilter(GarageDoorStateChangedTopic)
+            .WithTopicFilter(GarageDoorQueryStateTopic)
+            .Build();
     }
 
     private HttpClient GetHttpClient()
@@ -88,36 +91,46 @@ public class Worker : BackgroundService
     {
         try
         {
-            var payload = Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
-            _logger.LogInformation($"Received message on topic {e.ApplicationMessage.Topic}: {payload}");
-
-            if (OpeningState.Equals(payload, StringComparison.OrdinalIgnoreCase))
+            if (GarageDoorQueryStateTopic.Equals(e.ApplicationMessage.Topic, StringComparison.InvariantCultureIgnoreCase))
             {
-                _logger.LogInformation("Garage door is opening.");
-
-                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
-                {
-                    await RegisterDoorStateAsync(OpeningApiEndpoint, cts.Token);
-                }
-
                 using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
                 {
                     await UpdateDisplayCounter(cts.Token);
                 }
             }
-            else if (ClosedState.Equals(payload, StringComparison.OrdinalIgnoreCase))
+            else if (GarageDoorStateChangedTopic.Equals(e.ApplicationMessage.Topic, StringComparison.InvariantCultureIgnoreCase))
             {
-                _logger.LogInformation("Garage door is closed.");
+                var payload = Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
+                _logger.LogInformation($"Received message on topic {e.ApplicationMessage.Topic}: {payload}");
 
-                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
+                if (OpeningState.Equals(payload, StringComparison.OrdinalIgnoreCase))
                 {
-                    await RegisterDoorStateAsync(ClosedApiEndpoint, cts.Token);
+                    _logger.LogInformation("Garage door is opening.");
+
+                    using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
+                    {
+                        await RegisterDoorStateAsync(OpeningApiEndpoint, cts.Token);
+                    }
+
+                    using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
+                    {
+                        await UpdateDisplayCounter(cts.Token);
+                    }
                 }
-            }
-            else
-            {
-                _logger.LogWarning($"Unknown state received: {payload}");
-            }
+                else if (ClosedState.Equals(payload, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation("Garage door is closed.");
+
+                    using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
+                    {
+                        await RegisterDoorStateAsync(ClosedApiEndpoint, cts.Token);
+                    }
+                }
+                else
+                {
+                    _logger.LogWarning($"Unknown state received: {payload}");
+                }
+            } 
         }
         catch (Exception ex)
         {
