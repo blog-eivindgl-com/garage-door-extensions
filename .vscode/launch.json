@@ -1,0 +1,43 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+            {
+                "name": "Launch WebAPI",
+                "type": "coreclr",
+                "request": "launch",
+                "preLaunchTask": "dotnet: build /home/eivind/GitHub/garage-door-extensions/backend/src/garage-door-extensions-backend/garage-door-extensions-backend.csproj",
+                "program": "${workspaceFolder}/backend/src/garage-door-extensions-backend/bin/Debug/net9.0/garage-door-extensions-backend.dll",
+                "cwd": "${workspaceFolder}/backend/src/garage-door-extensions-backend/",
+                "stopAtEntry": false,
+                "env": {
+                    "ASPNETCORE_ENVIRONMENT": "Development"
+                },
+                "console": "internalConsole"
+            },
+            {
+                "name": "Launch Worker Service",
+                "type": "coreclr",
+                "request": "launch",
+                "preLaunchTask": "dotnet: build /home/eivind/GitHub/garage-door-extensions/backend/src/garage-door-extensions-service/garage-door-extensions-service.csproj",
+                "program": "${workspaceFolder}/backend/src/garage-door-extensions-service/bin/Debug/net9.0/garage-door-extensions-service.dll",
+                "cwd": "${workspaceFolder}/backend/src/garage-door-extensions-service/",
+                "stopAtEntry": false,
+                "env": {
+                    "DOTNET_ENVIRONMENT": "Development"
+                },
+                "console": "internalConsole"
+            }
+        ],
+    "compounds": [
+        {
+            "name": "Run Both Projects",
+            "configurations": [
+                "Launch WebAPI",
+                "Launch Worker Service"
+            ]
+        }
+    ]
+} 

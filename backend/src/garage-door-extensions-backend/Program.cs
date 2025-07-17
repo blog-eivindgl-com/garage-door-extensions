@@ -4,8 +4,8 @@ using Microsoft.AspNetCore.Routing;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Kestrel for HTTPS in development
-if (builder.Environment.IsDevelopment())
+// Configure Kestrel for HTTPS in development (only outside of containers)
+if (builder.Environment.IsDevelopment() && Environment.GetEnvironmentVariable("DOTNET_RUNNING_IN_CONTAINER") != "true")
 {
     builder.WebHost.ConfigureKestrel(options =>
     {

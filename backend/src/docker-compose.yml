@@ -1,0 +1,39 @@
+services:
+  garage-door-backend:
+    build:
+      context: .
+      dockerfile: garage-door-extensions-backend/Dockerfile
+    container_name: garage-door-backend
+    ports:
+      - "5035:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_URLS=http://+:8080
+      - DOTNET_RUNNING_IN_CONTAINER=true
+    networks:
+      - garage-door-network
+    restart: unless-stopped
+
+  garage-door-service:
+    build:
+      context: .
+      dockerfile: garage-door-extensions-service/Dockerfile
+    container_name: garage-door-service
+    environment:
+      - DOTNET_ENVIRONMENT=Development
+      - BackendApi__BaseUri=http://garage-door-backend:8080
+    depends_on:
+      - garage-door-backend
+    networks:
+      - garage-door-network
+      - mqtt5-network
+    restart: unless-stopped
+
+networks:
+  garage-door-network:
+    driver: bridge
+  mqtt5-network:
+    driver: bridge
+
+volumes:
+  garage-door-data:
