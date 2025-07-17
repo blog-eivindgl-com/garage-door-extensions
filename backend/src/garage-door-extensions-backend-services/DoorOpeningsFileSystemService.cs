@@ -296,6 +296,31 @@ public class DoorOpeningsFileSystemService : IDoorOpeningsService
         return 0; // No closings found
     }
 
+    public string GetLastDoorState()
+    {
+        var lastOpenedFile = GetLastFile(DoorState.Opened);
+        var lastClosedFile = GetLastFile(DoorState.Closed);
+        DateTimeOffset? lastOpenedTime = GetDateTimeFromFile(lastOpenedFile);
+        DateTimeOffset? lastClosedTime = GetDateTimeFromFile(lastClosedFile);
+
+        if (lastOpenedTime == null && lastClosedTime == null)
+        {
+            return "unknown"; // No state available
+        }
+
+        if (lastOpenedTime != null && (lastClosedTime == null || lastOpenedTime > lastClosedTime))
+        {
+            return "opened";
+        }
+
+        if (lastClosedTime != null && (lastOpenedTime == null || lastClosedTime > lastOpenedTime))
+        {
+            return "closed";
+        }
+
+        return "unknown"; // If both are equal, we can't determine the state
+    }
+
     private enum DoorState
     {
         Opened,

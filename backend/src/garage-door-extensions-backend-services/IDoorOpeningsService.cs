@@ -11,6 +11,7 @@ public interface IDoorOpeningsService
     string GetDisplayData();
     long GetLastDoorOpened();
     long GetLastDoorClosed();
+    string GetLastDoorState();
     void RegisterDoorOpening();
     void RegisterDoorClosing();
 }

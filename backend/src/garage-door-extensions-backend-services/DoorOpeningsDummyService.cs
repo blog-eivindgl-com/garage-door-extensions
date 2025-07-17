@@ -39,7 +39,7 @@ public class DoorOpeningsDummyService : IDoorOpeningsService
             + $"\"lastClosed\": {GetLastDoorClosed()}, "
             + $"\"openDurationInSeconds\": {GetDoorOpenDurationInSeconds()}"
             + "}";
-    } 
+    }
 
     public void RegisterDoorOpening()
     {
@@ -88,5 +88,27 @@ public class DoorOpeningsDummyService : IDoorOpeningsService
         }
 
         return _doorClosings.Max().ToUnixTimeSeconds(); // Return the last door closed timestamp in seconds
+    }
+    
+    public string GetLastDoorState()
+    {
+        if (_doorOpenings.Count == 0 && _doorClosings.Count == 0)
+        {
+            return "unknown"; // No state available
+        }
+
+        var lastOpened = _doorOpenings.LastOrDefault();
+        var lastClosed = _doorClosings.LastOrDefault();
+
+        if (lastOpened > lastClosed)
+        {
+            return "opened";
+        }
+        else if (lastClosed > lastOpened)
+        {
+            return "closed";
+        }
+        
+        return "unknown"; // If both are equal, we can't determine the state
     }
 }

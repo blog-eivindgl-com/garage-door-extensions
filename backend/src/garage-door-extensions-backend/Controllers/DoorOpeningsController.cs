@@ -61,7 +61,14 @@ public class DoorOpeningsController : ControllerBase
     {
         var lastDoorClosed = _doorOpeningService.GetLastDoorClosed();
         return Ok(lastDoorClosed);
-    } 
+    }
+
+   [HttpGet("lastdoorstate")]
+   public IActionResult GetLastDoorState()
+   {
+       var lastDoorState = _doorOpeningService.GetLastDoorState();
+       return Ok(lastDoorState);
+   }
 
     [HttpPost("RegisterDoorOpening")]
     public IActionResult RegisterDoorOpening()
