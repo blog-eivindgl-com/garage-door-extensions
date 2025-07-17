@@ -15,63 +15,63 @@ public class DoorOpeningsController : ControllerBase
     }
 
     [HttpGet("today")]
-    public async Task<IActionResult> GetDoorOpeningsToday()
+    public IActionResult GetDoorOpeningsToday()
     {
         var openings = _doorOpeningService.GetDoorOpeningsToday();
         return Ok(openings);
     }
 
     [HttpGet("week")]
-    public async Task<IActionResult> GetDoorOpeningsThisWeek()
+    public IActionResult GetDoorOpeningsThisWeek()
     {
         var openings = _doorOpeningService.GetDoorOpeningsThisWeek();
         return Ok(openings);
     }
 
     [HttpGet("month")]
-    public async Task<IActionResult> GetDoorOpeningsThisMonth()
+    public IActionResult GetDoorOpeningsThisMonth()
     {
         var openings = _doorOpeningService.GetDoorOpeningsThisMonth();
         return Ok(openings);
     }
 
     [HttpGet("display")]
-    public async Task<IActionResult> GetDisplayData()
+    public IActionResult GetDisplayData()
     {
         var displayData = _doorOpeningService.GetDisplayData();
         return Ok(displayData);
     }
 
     [HttpGet("openduration")]
-    public async Task<IActionResult> GetDoorOpenDuration()
+    public IActionResult GetDoorOpenDuration()
     {
         var openduration = _doorOpeningService.GetDoorOpenDurationInSeconds();
         return Ok(openduration);
     } 
 
     [HttpGet("lastopened")]
-    public async Task<IActionResult> GetLastDoorOpened()
+    public IActionResult GetLastDoorOpened()
     {
         var lastDoorOpened = _doorOpeningService.GetLastDoorOpened();
         return Ok(lastDoorOpened);
     }
 
     [HttpGet("lastclosed")]
-    public async Task<IActionResult> GetLastDoorClosed()
+    public IActionResult GetLastDoorClosed()
     {
         var lastDoorClosed = _doorOpeningService.GetLastDoorClosed();
         return Ok(lastDoorClosed);
     } 
 
     [HttpPost("RegisterDoorOpening")]
-    public async Task<IActionResult> RegisterDoorOpening()
+    public IActionResult RegisterDoorOpening()
     {
         _doorOpeningService.RegisterDoorOpening();
         return NoContent();
     }
 
     [HttpPost("RegisterDoorClosing")]
-    public async Task<IActionResult> RegisterDoorClosing()
+    public IActionResult RegisterDoorClosing()
     {
         _doorOpeningService.RegisterDoorClosing();
         return NoContent();
