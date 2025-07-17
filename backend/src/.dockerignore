@@ -1,0 +1,46 @@
+# Exclude build artifacts
+**/bin
+**/obj
+**/out
+
+# Exclude Visual Studio and VS Code files
+**/.vs
+**/.vscode
+.vscode/
+
+# Exclude Git files
+.git/
+.gitignore
+**/.gitignore
+
+# Exclude documentation files
+**/*.md
+LICENSE
+
+# Exclude development files
+**/.env
+**/.env.*
+**/appsettings.Development.json
+
+# Exclude test files
+**/TestResults
+
+# Exclude Node.js files (if any)
+**/node_modules
+**/npm-debug.log
+
+# Exclude temporary files
+**/tmp/
+**/temp/
+**/*.tmp
+**/*.temp
+
+# Exclude OS generated files
+.DS_Store
+Thumbs.db
+
+# Exclude IDE files
+**/*.user
+**/*.suo
+**/*.userosscache
+**/*.sln.docstates
