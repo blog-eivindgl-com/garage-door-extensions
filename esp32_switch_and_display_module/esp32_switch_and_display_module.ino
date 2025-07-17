@@ -43,6 +43,11 @@ int currentDisplayDigit = -1;
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);  // MQTT
 
+const int RfidModuleSerialBaud = 9600;
+const int RfidModuleTxPin = 34;  // This module's TX pin (connects to other module's RX)
+const int RfidModuleRxPin = 35;  // This module's RX pin (connects to other module's TX)
+HardwareSerial rfidModuleSerial(2);
+
 void IRAM_ATTR handleButtonInterrupt() {
   if (digitalRead(ButtonPin) == LOW) {
     buttonState = true;
@@ -107,7 +112,6 @@ void queryCounter() {
 }
 
 void handleOpenDoorMessage() {
-  // TODO: This function should be a callback with incoming MQTT message subscribing to open door topic
   digitalWrite(OpenDoorPin, HIGH);
   delay(2000);
   digitalWrite(OpenDoorPin, LOW);
@@ -168,6 +172,32 @@ void cycleLedsStartupProcedure() {
   Serial.println("Turning all LEDs off");
   for (int pin : indicatorLedPins) {
     digitalWrite(pin, LOW);
+  }
+}
+
+void incomingSerialMessageFromRfIdModule() {
+  // Check if data is available
+  if (rfidModuleSerial.available() > 0) {
+    Serial.printf("Serial data available: %d bytes\n", rfidModuleSerial.available());
+    
+    // Read byte data from the RFID module
+    String data = rfidModuleSerial.readString();
+    data.trim();  // Remove any whitespace/newline characters
+    
+    Serial.print("Received serial data: '");
+    Serial.print(data);
+    Serial.print("' (length: ");
+    Serial.print(data.length());
+    Serial.println(")");
+    
+    if (data == "opendoor") {
+      Serial.println("Processing open door command from RFID module");
+      handleOpenDoorMessage();
+    } else if (data == "test") {
+      Serial.println("Test message received successfully from RFID module!");
+    } else if (data.length() > 0) {
+      Serial.println("Unknown command received");
+    }
   }
 }
 
@@ -234,6 +264,12 @@ void incomingMqttMessage(char *topic, uint8_t *message, unsigned int length) {
 
 void setup() {
   Serial.begin(115200);
+
+  // Start Serial 2 with the defined RX and TX pins and a baud rate of 9600
+  rfidModuleSerial.begin(RfidModuleSerialBaud, SERIAL_8N1, RfidModuleRxPin, RfidModuleTxPin);
+  Serial.printf("Serial 2 started at %d baud rate\n", RfidModuleSerialBaud);
+  Serial.printf("Serial 2 configuration - RX: %d, TX: %d\n", RfidModuleRxPin, RfidModuleTxPin);
+  Serial.println("Waiting for serial data from RFID module...");
 
   // Setup all LED segment pins for output by calling the SevenSegmentDisplay.begin() function
   display.begin();
@@ -316,6 +352,8 @@ void loop() {
   }
 
   mqttClient.loop(); // Process incoming MQTT messages
+
+  incomingSerialMessageFromRfIdModule();  // Process incoming serial messages from RFID module
 
   // Handle button state without affecting display refresh
   if (millis() - lastCheckedButtonState >= 100) {

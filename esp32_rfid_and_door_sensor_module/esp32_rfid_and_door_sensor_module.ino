@@ -6,12 +6,38 @@
 #include "parameters.h"
 
 const int MagnetSensorPin = 15;
+const int OpenDoorButtonPin = 26;  // TODO: Replace this with RFID reader
 char doorSensorState[7] = "closed";
 std::atomic<bool> doorSensorStateChanged = false;
 unsigned long doorSensorChangedTime = 0;
 
+volatile bool buttonState = false;  // TODO: Remove when button is replaced with RFID reader
+volatile bool buttonStateChanged = false;  // TODO: Remove when button is replaced with RFID reader
+
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);  // MQTT
+
+const int DisplayModuleSerialBaud = 9600;
+const int DisplayModuleTxPin = 35;
+const int DisplayModuleRxPin = 34;
+HardwareSerial displayModuleSerial(2);
+
+void IRAM_ATTR handleButtonInterrupt() {
+  if (digitalRead(OpenDoorButtonPin) == LOW) {
+    buttonState = true;
+    buttonStateChanged = true;
+  } else {
+    buttonState = false;
+    buttonStateChanged = true;
+  }
+}
+
+void checkButtonState() {
+  if (buttonStateChanged && buttonState) {
+    sendOpenDoorMessageToDisplayModule();
+    buttonStateChanged = false;
+  }
+}
 
 void checkDoorSensorState() {
   if (digitalRead(MagnetSensorPin) == LOW) {
@@ -61,6 +87,24 @@ void printLocalTime() {
 void timeavailable(struct timeval *t) {
   Serial.println("Got time adjustment from NTP!");
   printLocalTime();
+}
+
+void sendOpenDoorMessageToDisplayModule() {
+  Serial.println("Send opendoor message to display module...");
+  
+  // Clear any pending data in the buffer
+  displayModuleSerial.flush();
+  
+  // Send the message with newline terminator
+  displayModuleSerial.println("opendoor");
+  
+  // Ensure data is actually transmitted
+  displayModuleSerial.flush();
+  
+  Serial.println("Message sent!");
+  
+  // Small delay to ensure message is processed
+  delay(50);
 }
 
 void incomingMqttMessage(char *topic, uint8_t *message, unsigned int length) {
@@ -132,9 +176,20 @@ void subscribeToMqttTopics() {
 void setup() {
   Serial.begin(115200);
   
+  // Start Serial 2 with the defined RX and TX pins and a baud rate of 9600
+  displayModuleSerial.begin(DisplayModuleSerialBaud, SERIAL_8N1, DisplayModuleRxPin, DisplayModuleTxPin);
+  Serial.printf("Serial 2 started at %d baud rate\n", DisplayModuleSerialBaud);
+  Serial.printf("Serial 2 configuration - RX: %d, TX: %d\n", DisplayModuleRxPin, DisplayModuleTxPin);
+  Serial.println("Ready to send serial data to display module...");
+
   // Setup magnet sensor pin for interrupt
   Serial.println("Assigning magnet sensor pin...");
   pinMode(MagnetSensorPin, INPUT_PULLUP);
+
+  // Setup button pin for interrupt
+  Serial.println("Assigning button pin...");
+  pinMode(OpenDoorButtonPin, INPUT_PULLUP);
+  attachInterrupt(OpenDoorButtonPin, handleButtonInterrupt, CHANGE);
 
   // First step is to configure WiFi STA and connect in order to get the current time and date.
   Serial.printf("Connecting to %s ", wifi_ssid);
@@ -183,16 +238,30 @@ void setup() {
 
   // Register this device as a door sensor in Home Assistant
   publishDiscoveryMqttMessage();
+  
+  // Send a test message to verify serial communication
+  delay(2000);  // Wait for display module to fully initialize
+  Serial.println("Sending test message to display module...");
+  displayModuleSerial.println("test");
+  displayModuleSerial.flush();
+  Serial.println("Test message sent!");
 }
 
 void loop() {
-  if (!mqttClient.connected()) {
-    reconnectMqttBroker();
-  }
+  static unsigned long lastCheckedButtonState = 0;
+  // if (!mqttClient.connected()) {
+  //   reconnectMqttBroker();
+  // }
 
-  mqttClient.loop(); // Process incoming MQTT messages
+  // mqttClient.loop(); // Process incoming MQTT messages
 
   checkDoorSensorState();
+
+    // Handle button state without affecting display refresh
+  if (millis() - lastCheckedButtonState >= 100) {
+    checkButtonState();
+    lastCheckedButtonState = millis();  // Reset timing
+  }
 
   delay(100);
 }
