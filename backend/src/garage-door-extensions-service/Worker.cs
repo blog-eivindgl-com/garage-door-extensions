@@ -9,7 +9,8 @@ namespace BlogEivindGLCom.GarageDoorExtensionsBackend.Service;
 public class Worker : BackgroundService
 {
     internal const string BackendApiHttpClient = "BackendApi";
-    private const string GarageDoorMqttTopic = "garageDoor/doorStateChanged";
+    private const string GarageDoorStateChangedTopic = "garageDoor/doorStateChanged";
+    private const string GarageDoorDisplayTopic = "garageDoor/display";
     private const string AlertTopic = "garageDoor/alert";
     private const string AlertMessageDurationPlaceholder = "{duration}";
     private const string OpeningState = "opening";
@@ -57,7 +58,7 @@ public class Worker : BackgroundService
             .Build();
         _mqttClient.ApplicationMessageReceivedAsync += HandleIncomingMessageAsync;
         _mqttDoorStateSubscribeOptions = mqttFactory.CreateSubscribeOptionsBuilder()
-            .WithTopicFilter(GarageDoorMqttTopic).Build();
+            .WithTopicFilter(GarageDoorStateChangedTopic).Build();
     }
 
     private HttpClient GetHttpClient()
@@ -165,7 +166,7 @@ public class Worker : BackgroundService
                     
                     // Subscribe to the MQTT topic garageDoor/doorStateChanged
                     await _mqttClient.SubscribeAsync(_mqttDoorStateSubscribeOptions, stoppingToken);
-                    _logger.LogInformation($"Subscribed to topic: {GarageDoorMqttTopic}");
+                    _logger.LogInformation($"Subscribed to topic: {GarageDoorStateChangedTopic}");
                 }
             }
         }
@@ -193,7 +194,7 @@ public class Worker : BackgroundService
 
             // Publish an MQTT message to update the display counter
             await _mqttClient.PublishAsync(new MqttApplicationMessageBuilder()
-                .WithTopic(GarageDoorMqttTopic)
+                .WithTopic(GarageDoorDisplayTopic)
                 .WithPayload(displayData)
                 .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
                 .Build(), stoppingToken);
