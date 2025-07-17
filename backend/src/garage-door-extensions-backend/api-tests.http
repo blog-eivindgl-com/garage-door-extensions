@@ -1,0 +1,83 @@
+###
+# Garage Door Extensions Backend API Tests
+# Base URL: http://localhost:5035
+###
+
+@baseUrl = http://localhost:5035
+@apiPath = /api/dooropenings
+
+### Get Door Openings Today
+GET {{baseUrl}}{{apiPath}}/today
+Accept: application/json
+
+###
+
+### Get Door Openings This Week
+GET {{baseUrl}}{{apiPath}}/week
+Accept: application/json
+
+###
+
+### Get Door Openings This Month
+GET {{baseUrl}}{{apiPath}}/month
+Accept: application/json
+
+###
+
+### Get Display Data
+GET {{baseUrl}}{{apiPath}}/display
+Accept: application/json
+
+###
+
+
+### Get duration of last door opening
+GET {{baseUrl}}{{apiPath}}/openduration
+Accept: application/json
+
+###
+
+### Get last door opening
+GET {{baseUrl}}{{apiPath}}/lastopened
+Accept: application/json
+
+###
+
+### Get last door closing
+GET {{baseUrl}}{{apiPath}}/lastclosed
+Accept: application/json
+
+###
+
+### Register Door Opening
+POST {{baseUrl}}{{apiPath}}/RegisterDoorOpening
+Content-Type: application/json
+
+###
+
+### Register Door Closing
+POST {{baseUrl}}{{apiPath}}/RegisterDoorClosing
+Content-Type: application/json
+
+###
+
+### Test with different ports (in case your app runs on different port)
+@altBaseUrl = https://localhost:7058
+
+### Get Door Openings Today (HTTPS)
+GET {{altBaseUrl}}{{apiPath}}/today
+Accept: application/json
+
+###
+
+### Health Check - Test if API is running
+GET {{baseUrl}}/
+Accept: text/html
+
+###
+
+### Test 404 - Non-existent endpoint
+GET {{baseUrl}}{{apiPath}}/nonexistent
+Accept: application/json
+
+###
