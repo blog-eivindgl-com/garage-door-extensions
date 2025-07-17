@@ -25,6 +25,7 @@ public class Worker : BackgroundService
     private readonly ILogger<Worker> _logger;
     private DateTime? _lastPing;
     private DateTime? _lastAlertCheck;
+    private long _alertSentForDoorOpenedAt = 0; // Timestamp of the time that the door was opened for the last alert sent. Used to prevent multiple alerts for the same door open event.
     private bool disposed = false;
 
     public Worker(IOptions<MqttClientOptions> mqttClientOptions, IOptions<AlertOptions> alertOptions, IHttpClientFactory httpClientFactory, ILogger<Worker> logger)
@@ -217,8 +218,38 @@ public class Worker : BackgroundService
         {
             _lastAlertCheck = DateTime.UtcNow;
 
-            // Check if the door has been open for too long
+            // Check if the door is currently open by comparing last opened and closed times
+            // If the door is open, we will send an alert if it has been open for too long
             using var httpClient = GetHttpClient();
+            var lastOpenedResponse = await httpClient.GetAsync("api/dooropenings/lastopened", stoppingToken);
+            if (!lastOpenedResponse.IsSuccessStatusCode)
+            {
+                _logger.LogError($"Failed to get last opened time: {lastOpenedResponse.ReasonPhrase}");
+                return;
+            }
+            var lastOpened = await lastOpenedResponse.Content.ReadAsStringAsync(stoppingToken);
+
+            var lastClosedResponse = await httpClient.GetAsync("api/dooropenings/lastclosed", stoppingToken);
+            if (!lastClosedResponse.IsSuccessStatusCode)
+            {
+                _logger.LogError($"Failed to get last closed time: {lastClosedResponse.ReasonPhrase}");
+                return;
+            }
+
+            var lastClosed = await lastClosedResponse.Content.ReadAsStringAsync(stoppingToken);
+            if (string.IsNullOrWhiteSpace(lastOpened) || string.IsNullOrWhiteSpace(lastClosed))
+            {
+                _logger.LogWarning("No door open or closed events found, skipping alert check.");
+                return; // No door open or closed events found, skip alert check
+            }
+
+            // If the door was opened after it was closed, we consider it open
+            if (long.TryParse(lastOpened, out long lastOpenedTimestamp) && long.TryParse(lastClosed, out long lastClosedTimestamp) && lastClosedTimestamp > lastOpenedTimestamp)
+            {
+                return; // No alert needed, door is closed
+            }
+
+            // Check if the door has been open for too long
             var response = await httpClient.GetAsync("api/dooropenings/openduration", stoppingToken);
 
             if (!response.IsSuccessStatusCode)
@@ -233,6 +264,17 @@ public class Worker : BackgroundService
             {
                 _logger.LogInformation($"Garage door has been open for {duration} seconds, which is less than the configured timeout of {_alertOptions.Value.GarageDoorOpenTimeoutSeconds} seconds.");
                 return; // No alert needed
+            }
+
+            // Check if an alert has already been sent for the last opened time
+            if (lastOpenedTimestamp > _alertSentForDoorOpenedAt)
+            {
+                _alertSentForDoorOpenedAt = lastOpenedTimestamp; // Update the timestamp of the last alert sent
+            }
+            else
+            {
+                _logger.LogInformation("No new door open event detected since the last alert.");
+                return; // No new door open event, no alert needed
             }
 
             _logger.LogWarning($"Garage door has been open for {openDuration} seconds, sending alert...");
