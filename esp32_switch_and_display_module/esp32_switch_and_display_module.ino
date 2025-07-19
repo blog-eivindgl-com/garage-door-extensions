@@ -171,6 +171,25 @@ void cycleLedsStartupProcedure() {
   }
 }
 
+void updateDisplayOnceAfterMidnight() {
+  static bool hasRefreshedAfterMidnight = false;
+  struct tm timeinfo;
+
+  if (getLocalTime(&timeinfo)) {
+    if (&timeinfo.tm_hour == 0 && &timeinfo.tm_min == 0 && timeinfo.tm_sec <= 59) {
+      // It's time to refresh display, but only do it once a night
+      if (!hasRefreshedAfterMidnight) {
+        Serial.println("Update display around midnight");
+        queryCounter();
+        hasRefreshedAfterMidnight = true;
+      }
+    } else if (&timeinfo.tm_hour == 0 &timeinfo.tm_min == 1 && hasRefreshedAfterMidnight) {
+      Serial.println("Reset flag to update display around midnight to run again next day");
+      hasRefreshedAfterMidnight = false;  // Reset flag for tomorrow
+    }
+  }
+}
+
 void incomingMqttMessage(char *topic, uint8_t *message, unsigned int length) {
   Serial.print("Message received on topic: ");
   Serial.println(topic);
@@ -328,4 +347,7 @@ void loop() {
     display.updateDisplay(currentDisplayDigit);
     lastUpdateTime = millis();  // Reset timing
   }
+
+  // Update display once after midnight to reset display counters
+  updateDisplayOnceAfterMidnight();
 }
