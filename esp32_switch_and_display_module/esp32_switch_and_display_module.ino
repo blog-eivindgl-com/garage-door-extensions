@@ -12,6 +12,7 @@ const int DayLedPin = 12;
 const int WeekLedPin = 14;
 const int MonthLedPin = 27;
 const int OpenDoorPin = 25;
+const int InputOpenDoorPin = 33;
 std::vector<int> indicatorLedPins = { DayLedPin, WeekLedPin, MonthLedPin };
 int dayCounter = 0;
 int weekCounter = 0;
@@ -19,6 +20,8 @@ int monthCounter = 0;
 int currentSelectorValue = -1;
 volatile bool buttonState = false;
 volatile bool buttonStateChanged = false;
+volatile bool openDoorState = false;
+volatile bool openDoorStateChanged = false;
 
 const DigitPins digitPins = {
   .onesDigit = 5,
@@ -106,11 +109,35 @@ void queryCounter() {
   mqttClient.publish("garageDoor/queryState", "");
 }
 
-void handleOpenDoorMessage() {
-  // TODO: This function should be a callback with incoming MQTT message subscribing to open door topic
-  digitalWrite(OpenDoorPin, HIGH);
-  delay(2000);
-  digitalWrite(OpenDoorPin, LOW);
+void IRAM_ATTR handleOpenDoorInterrupt() {
+  if (digitalRead(InputOpenDoorPin) == HIGH) {
+    openDoorState = true;
+    openDoorStateChanged = true;
+  } else {
+    openDoorState = false;
+    openDoorStateChanged = true;
+  }
+}
+
+void checkOpenDoorState() {
+  static bool isOpeningDoor = false;
+  static unsigned long doorOpenSignalStartedAt = 0;
+
+  // Let OpenDoorPin be HIGH for 2 seconds without interrupting display
+  if (isOpeningDoor && millis() - doorOpenSignalStartedAt >= 2000) {
+    // Stop sending open door signal after 2s
+    digitalWrite(OpenDoorPin, LOW);
+    isOpeningDoor = false;
+  }
+
+  if (openDoorStateChanged && openDoorState) {
+    openDoorStateChanged = false;
+    // Send open door signal, and let pin be HIGH for a delay without interruptinig the display
+    digitalWrite(OpenDoorPin, HIGH);
+    doorOpenSignalStartedAt = millis();
+    isOpeningDoor = true;
+    Serial.println("Opening door");
+  }
 }
 
 void reconnectMqttBroker() {
@@ -244,9 +271,11 @@ void setup() {
     digitalWrite(pin, LOW);
   }
 
-  // Setup open door pin for output
+  // Setup open door pin for output and signal pin from RFID module for input
   pinMode(OpenDoorPin, OUTPUT);
   digitalWrite(OpenDoorPin, LOW);
+  pinMode(InputOpenDoorPin, INPUT_PULLUP);
+  attachInterrupt(InputOpenDoorPin, handleOpenDoorInterrupt, CHANGE);
 
   // Setup button pin for interrupt
   Serial.println("Assigning button pin...");
@@ -309,7 +338,7 @@ void setup() {
 void loop() {
   static unsigned long lastUpdateTime = 0;
   static unsigned long lastCheckedButtonState = 0;
-  static unsigned long lastSimulationOpenDoor = 0;
+  static unsigned long lastCheckedOpenDoorState = 0;
 
   if (!mqttClient.connected()) {
     reconnectMqttBroker();
@@ -321,6 +350,12 @@ void loop() {
   if (millis() - lastCheckedButtonState >= 100) {
     checkButtonState();
     lastCheckedButtonState = millis();  // Reset timing
+  }
+
+  // Handle open door state without affecting display refresh
+  if (millis() - lastCheckedOpenDoorState >= 100) {
+    checkOpenDoorState();
+    lastCheckedOpenDoorState = millis();  // Reset timing
   }
 
   // Ensure display refresh happens ~every 5ms
