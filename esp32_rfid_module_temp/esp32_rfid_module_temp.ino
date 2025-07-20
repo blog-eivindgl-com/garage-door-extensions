@@ -11,10 +11,19 @@
 #include <MFRC522DriverPinSimple.h>
 #include <MFRC522Debug.h>
 
+// Adapted from: https://github.com/espressif/arduino-esp32/blob/master/libraries/LittleFS/examples/LITTLEFS_test/LITTLEFS_test.ino
+// Project details: https://RandomNerdTutorials.com/esp32-write-data-littlefs-arduino/
+#include <Arduino.h>
+#include "FS.h"
+#include <LittleFS.h>
+#define FORMAT_LITTLEFS_IF_FAILED true
+#include <vector>
+
 const int BeepPin = 13;
 const int BlueLedPin = 26;
 const int GreenLedPin = 27;
 const int OpenDoorPin = 25;
+std::vector<String> validRfidValues = { };
 
 // Learn more about using SPI/I2C or check the pin assigment for your board: https://github.com/OSSLibraries/Arduino_MFRC522v2#pin-layout
 MFRC522DriverPinSimple ss_pin(5);
@@ -23,7 +32,25 @@ MFRC522DriverSPI driver{ss_pin}; // Create SPI driver
 //MFRC522DriverI2C driver{};     // Create I2C driver
 MFRC522 mfrc522{driver};         // Create MFRC522 instance
 
-void FeedbackForGrantedAccess() {
+bool ValidateRfid(String rfid) {
+  if (rfid.length() == 0) {
+    return false;
+  }
+
+  Serial.printf("Validating %s. ", rfid);
+  for (String validRfid : validRfidValues) {
+    Serial.printf("Comparing it to %s. ", validRfid);
+    if (rfid == validRfid) {
+      Serial.printf("%s is valid.\n", rfid);
+      return true;
+    }
+  }
+
+  Serial.printf("%s is NOT valid.\n", rfid);
+  return false;
+}
+
+void AccessGranted() {
   digitalWrite(BlueLedPin, LOW);
   digitalWrite(GreenLedPin, HIGH);
   digitalWrite(BeepPin, HIGH);   // set the Buzzer on
@@ -53,6 +80,42 @@ void FlashBlueLed() {
     digitalWrite(BlueLedPin, HIGH);
     lastSwitchedBlueLed = millis();
   }
+}
+
+void UpdateFileOfValidRfidValues(String mqttMessage) {
+  File file = LittleFS.open("/rfid-values.txt", "w");
+  file.print(mqttMessage);
+  file.close();
+  Serial.println("Updated /rfid-values.txt");
+}
+
+void ReadFileOfValidRfidValues() {
+  File file = LittleFS.open("/rfid-values.txt", "r");
+
+  if (!file) {
+    Serial.println("Failed to open rfid-values.txt for reading");
+    return;
+  }
+
+  validRfidValues.clear();
+  String rfid = "";
+  Serial.println("File Content:");
+  while (file.available()) {
+    // Read each byte and append to the rfid string until line shift char(10), 
+    // then store all RFID values in memory as a vector until all file content is read
+    char c = file.read();
+
+    if (c == '\n') {
+      // We've read an RFID value, add it to the vector and clear rfid string to read the next one
+      validRfidValues.push_back(rfid);
+      Serial.printf(" Read an RFID: %s\n", rfid);
+      rfid = "";
+    } else {
+      rfid += c;
+      Serial.write(c);
+    }    
+  }
+  file.close();
 }
 
 // Flashes both LEDs and beeps to verify that components are OK
@@ -89,6 +152,27 @@ void setup() {
   MFRC522Debug::PCD_DumpVersionToSerial(mfrc522, Serial);	// Show details of PCD - MFRC522 Card Reader details.
   Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
 
+  if(!LittleFS.begin(FORMAT_LITTLEFS_IF_FAILED)){
+    Serial.println("An Error has occurred while mounting LittleFS");
+    return;
+  }
+
+  // Provide some test data in /rfid-values.txt if file doesn't already exist
+  File file = LittleFS.open("/rfid-values.txt", "r");
+  if (!file) {
+    file.close();
+    Serial.println("No /rfid-values.txt file exists, so create one with dummy data.");
+    // Dummy data to test list of valid RFID values
+    String dummyMqttMessage = "b338ec13\nc30e262a\n";
+    UpdateFileOfValidRfidValues(dummyMqttMessage);
+  } else {
+    file.close();
+    Serial.println("Using /rfid-values.txt to validate RFID cards");
+  }
+
+  // Read file of valid RFID cards into memory
+  ReadFileOfValidRfidValues();
+
   // Run sequence of LEDs and beep to verify that components are OK
   RunStartupSequence();
 }
@@ -120,8 +204,12 @@ void loop() {
   }
 
   if (uidString != "") {
-    FeedbackForGrantedAccess();
-    Serial.println(uidString);
+    if (ValidateRfid(uidString)) {
+      AccessGranted();
+      Serial.printf("Opened door for RFID %s\n", uidString);
+    } else {
+      Serial.printf("WARNING: %s is NOT valid for this door\n", uidString);
+    }
   }
 
   // Wait 2s before accepting a new card
