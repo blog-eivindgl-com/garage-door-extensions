@@ -1,0 +1,31 @@
+##
+# Apartment API
+# Base URL: http://localhost:5035
+###
+
+@baseUrl = http://localhost:5035
+@apiPath = /api/apartments
+
+### Get all apartments
+GET {{baseUrl}}{{apiPath}}
+Accept: application/json
+###
+
+### Get Apartment Name
+GET {{baseUrl}}{{apiPath}}/12%20A
+Accept: application/json
+###
+
+### Add Apartment
+POST {{baseUrl}}{{apiPath}}
+Content-Type: application/json
+
+{
+  "name": "12 A"
+}
+###
+
+### Delete Apartment
+DELETE {{baseUrl}}{{apiPath}}/New%20Apartment
+Accept: application/json
+###

@@ -1,0 +1,60 @@
+##
+# Apartment API
+# Base URL: http://localhost:5035
+###
+
+@baseUrl = http://localhost:5035
+@apiPath = /api/rfidcards
+
+### Get all RFID cards
+GET {{baseUrl}}{{apiPath}}
+Accept: application/json
+###
+
+### Get free RFID cards
+GET {{baseUrl}}{{apiPath}}/free
+Accept: application/json
+###
+
+### Get RFID Card
+GET {{baseUrl}}{{apiPath}}/abcdef02
+Accept: application/json
+###
+
+### Add RFID Card
+POST {{baseUrl}}{{apiPath}}
+Content-Type: application/json
+
+{
+  "rfid": "abcdef02",
+  "belongingUserId": "926157fb-0c1b-4bce-a243-de8ff3a28933",
+  "belongingApartment": "12 A"
+}
+###
+
+### Delete RFID Card
+DELETE {{baseUrl}}{{apiPath}}/abcdef01
+Accept: application/json
+###
+
+### Update RFID Card
+PUT {{baseUrl}}{{apiPath}}/abcdef02
+Content-Type: application/json
+
+{
+  "rfid": "abcdef02",
+  "belongingUserId": "00000000-0000-0000-0000-000000000000",
+  "belongingApartment": null
+}
+###
+
+### Make RFID Card valid for door
+POST {{baseUrl}}{{apiPath}}/valid-for-door
+Content-Type: application/json
+
+{
+  "rfid": "abcdef02",
+  "doorId": "garasjeport",
+  "validFrom": "2023-01-01T00:00:00Z",
+  "validTo": "2026-12-31T23:59:59Z"
+}
