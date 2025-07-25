@@ -1,0 +1,32 @@
+##
+# Apartment API
+# Base URL: http://localhost:5035
+###
+
+@baseUrl = http://localhost:5035
+@apiPath = /api/rfidusers
+
+### Get all RFID users
+GET {{baseUrl}}{{apiPath}}
+Accept: application/json
+###
+
+### Get RFID User
+GET {{baseUrl}}{{apiPath}}/926157fb-0c1b-4bce-a243-de8ff3a28933
+Accept: application/json
+###
+
+### Add RFID User
+POST {{baseUrl}}{{apiPath}}
+Content-Type: application/json
+
+{
+  "name": "Eivind Gussiås Løkseth",
+  "apartment": "12 A"
+}
+###
+
+### Delete RfID User
+DELETE {{baseUrl}}{{apiPath}}/3cb8761e-a777-40cd-8768-1524d961c5a9
+Accept: application/json
+###

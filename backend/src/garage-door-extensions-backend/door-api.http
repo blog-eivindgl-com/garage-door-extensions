@@ -1,0 +1,32 @@
+##
+# Apartment API
+# Base URL: http://localhost:5035
+###
+
+@baseUrl = http://localhost:5035
+@apiPath = /api/doors
+
+### Get all doors
+GET {{baseUrl}}{{apiPath}}
+Accept: application/json
+###
+
+### Get DoorId
+GET {{baseUrl}}{{apiPath}}/garasjeport
+Accept: application/json
+###
+
+### Add Door
+POST {{baseUrl}}{{apiPath}}
+Content-Type: application/json
+
+{
+  "doorId": "garasjeport",
+  "location": "Oppkjørselen i øst"
+}
+###
+
+### Delete Door
+DELETE {{baseUrl}}{{apiPath}}/garasjeport
+Accept: application/json
+###

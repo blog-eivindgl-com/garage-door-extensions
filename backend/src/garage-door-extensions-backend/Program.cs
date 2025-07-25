@@ -1,6 +1,8 @@
+using BlogEivindGLCom.GarageDoorExtensionsBackend.Model;
 using BlogEivindGLCom.GarageDoorExtensionsBackend.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,6 +20,10 @@ if (builder.Environment.IsDevelopment() && Environment.GetEnvironmentVariable("D
 }
 
 // Add services to the container.
+builder.Services.AddEntityFrameworkSqlite()
+    .AddDbContext<GarageDoorExtensionsDbContext>(options =>
+        options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+        
 builder.Services.AddSingleton<IDateTimeService, DateTimeService>();
 var doorOpeningServiceType = builder.Configuration.GetValue<string>("DoorOpeningsService:Type");
 switch (doorOpeningServiceType)

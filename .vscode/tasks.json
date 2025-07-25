@@ -7,7 +7,7 @@
 			"file": "/home/eivind/GitHub/garage-door-extensions/backend/src/garage-door-extensions-backend/garage-door-extensions-backend.csproj",
 			"group": "build",
 			"problemMatcher": ["$msCompile"],
-			"label": "dotnet: build /home/eivind/GitHub/garage-door-extensions/backend/src/garage-door-extensions-backend/garage-door-extensions-backend.csproj"
+			"label": "build-backend"
 		},
 		{
 			"type": "dotnet",
@@ -15,13 +15,13 @@
 			"file": "/home/eivind/GitHub/garage-door-extensions/backend/src/garage-door-extensions-service/garage-door-extensions-service.csproj",
 			"group": "build",
 			"problemMatcher": ["$msCompile"],
-			"label": "dotnet: build /home/eivind/GitHub/garage-door-extensions/backend/src/garage-door-extensions-service/garage-door-extensions-service.csproj"
+			"label": "build-service"
 		},
 		{
 			"label": "build-all",
 			"dependsOn": [
-				"dotnet: build /home/eivind/GitHub/garage-door-extensions/backend/src/garage-door-extensions-backend/garage-door-extensions-backend.csproj",
-				"dotnet: build /home/eivind/GitHub/garage-door-extensions/backend/src/garage-door-extensions-service/garage-door-extensions-service.csproj"
+				"build-backend",
+				"build-service"
 			],
 			"group": "build",
 			"problemMatcher": ["$msCompile"]
