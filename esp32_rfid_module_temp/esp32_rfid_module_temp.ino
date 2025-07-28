@@ -17,13 +17,25 @@
 #include "FS.h"
 #include <LittleFS.h>
 #define FORMAT_LITTLEFS_IF_FAILED true
+
+#include <WiFi.h>
+#include <PubSubClient.h>
+
+#include <atomic>
 #include <vector>
+#include "parameters.h"
+
+const int MagnetSensorPin = 15;
+char doorSensorState[7] = "closed";
+std::atomic<bool> doorSensorStateChanged = false;
+unsigned long doorSensorChangedTime = 0;
 
 const int BeepPin = 13;
 const int BlueLedPin = 26;
 const int GreenLedPin = 27;
 const int OpenDoorPin = 25;
 std::vector<String> validRfidValues = { };
+//String updateValidRfidCardsTopic = "garageDoor/updateValidRfidCards/" + doorId;
 
 // Learn more about using SPI/I2C or check the pin assigment for your board: https://github.com/OSSLibraries/Arduino_MFRC522v2#pin-layout
 MFRC522DriverPinSimple ss_pin(5);
@@ -31,6 +43,9 @@ MFRC522DriverPinSimple ss_pin(5);
 MFRC522DriverSPI driver{ss_pin}; // Create SPI driver
 //MFRC522DriverI2C driver{};     // Create I2C driver
 MFRC522 mfrc522{driver};         // Create MFRC522 instance
+
+WiFiClient wifiClient;
+PubSubClient mqttClient(wifiClient);  // MQTT
 
 bool ValidateRfid(String rfid) {
   if (rfid.length() == 0) {
@@ -118,6 +133,65 @@ void ReadFileOfValidRfidValues() {
   file.close();
 }
 
+void incomingMqttMessage(char *topic, uint8_t *message, unsigned int length) {
+  Serial.print("Message received on topic: ");
+  Serial.println(topic);
+
+  Serial.print("Message: ");
+
+  String value = "";
+
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)message[i]);
+    value += (char)message[i];
+  }
+
+  Serial.println();
+
+  if (strcmp(topic, "garageDoor/queryDeviceStatus") == 0) {
+    // Send current state of garage door sensor
+    if (digitalRead(MagnetSensorPin) == HIGH) {
+      strncpy(doorSensorState, "open", 7);
+      doorSensorStateChanged = true;
+    } else {
+      strncpy(doorSensorState, "closed", 7);
+      doorSensorStateChanged = true;
+    }
+  } /*else if (strcmp(topic, updateValidRfidCardsTopic) == 0) {
+    UpdateFileOfValidRfidValues(value);
+  }*/
+}
+
+void reconnectMqttBroker() {
+  while (!mqttClient.connected()) {
+    Serial.printf("Connecting to %s...\n", mqttServer);
+
+    if (mqttClient.connect("GarageDoorSensor2", mqtt_user, mqtt_password)) {
+      Serial.printf("connected to %s\n", mqttServer);
+    } else {
+      Serial.print("Failed, rc=");
+      Serial.println(mqttClient.state());
+      delay(2000);
+    }
+  }
+
+  subscribeToMqttTopics();
+}
+
+void subscribeToMqttTopics() {
+  if (mqttClient.subscribe("garageDoor/queryDeviceStatus")) {
+    Serial.println("Subscribed to topic: garageDoor/queryDeviceStatus");
+  } else {
+    Serial.println("Failed to subscribe to topic!");
+  }
+
+  /*if (mqttClient.subscribe(updateValidRfidCardsTopic)) {
+    Serial.println("Subscribed to topic: garageDoor/updateValidRfidCards/" + doorId);
+  } else {
+    Serial.println("Failed to subscribe to updateValidRfidCards topic!");
+  }*/
+}
+
 // Flashes both LEDs and beeps to verify that components are OK
 void RunStartupSequence() {
   digitalWrite(BeepPin, HIGH);
@@ -173,6 +247,24 @@ void setup() {
   // Read file of valid RFID cards into memory
   ReadFileOfValidRfidValues();
 
+  // First step is to configure WiFi STA and connect in order to get the current time and date.
+  Serial.printf("Connecting to %s ", wifi_ssid);
+  WiFi.begin(wifi_ssid, wifi_password);
+
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println(" CONNECTED");
+
+  // Connect to MQTT broker
+  mqttClient.setServer(mqttServer, 1883);
+  mqttClient.setCallback(incomingMqttMessage);
+
+  if (!mqttClient.connected()) {
+    reconnectMqttBroker();
+  }
+
   // Run sequence of LEDs and beep to verify that components are OK
   RunStartupSequence();
 }
@@ -209,6 +301,8 @@ void loop() {
       Serial.printf("Opened door for RFID %s\n", uidString);
     } else {
       Serial.printf("WARNING: %s is NOT valid for this door\n", uidString);
+      mqttClient.publish("garageDoor/invalidRfid", uidString.c_str());
+      Serial.println("MQTT message about invalid RFID sent.");
     }
   }
 
