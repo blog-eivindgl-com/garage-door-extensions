@@ -14,11 +14,13 @@ public class Worker : BackgroundService
     private const string GarageDoorQueryStateTopic = "garageDoor/queryState";
     private const string AlertTopic = "garageDoor/alert";
     private const string AlertMessageDurationPlaceholder = "{duration}";
+    private const string InvalidRfidTopic = "garageDoor/invalidRfid";
     private const string OpeningState = "opening";
     private const string ClosedState = "closed";
     private const string OpeningApiEndpoint = "api/dooropenings/RegisterDoorOpening";
     private const string ClosedApiEndpoint = "api/dooropenings/RegisterDoorClosing";
     private const string DisplayApiEndpoint = "api/dooropenings/display";
+    private const string InvalidRfidCardsApiEndpoint = "api/rfidcards/invalid";
     private readonly MQTTnet.MqttClientOptions _mqttClientOptions;
     private readonly MQTTnet.MqttClientSubscribeOptions _mqttDoorStateSubscribeOptions;
     private IMqttClient _mqttClient;
@@ -61,6 +63,7 @@ public class Worker : BackgroundService
         _mqttDoorStateSubscribeOptions = mqttFactory.CreateSubscribeOptionsBuilder()
             .WithTopicFilter(GarageDoorStateChangedTopic)
             .WithTopicFilter(GarageDoorQueryStateTopic)
+            .WithTopicFilter(InvalidRfidTopic)
             .Build();
     }
 
@@ -131,6 +134,20 @@ public class Worker : BackgroundService
                     _logger.LogWarning($"Unknown state received: {payload}");
                 }
             } 
+            else if (InvalidRfidTopic.Equals(e.ApplicationMessage.Topic, StringComparison.InvariantCultureIgnoreCase))
+            {
+                var rfid = Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
+                _logger.LogInformation($"Received invalid RFID: {rfid}");
+
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
+                {
+                    await StoreInvalidRfidAsync(rfid, cts.Token);
+                }
+            }
+            else
+            {
+                _logger.LogWarning($"Unhandled topic: {e.ApplicationMessage.Topic}");
+            }
         }
         catch (Exception ex)
         {
@@ -151,6 +168,22 @@ public class Worker : BackgroundService
         {
             //  TODO: Use Polly to retry on failure
             _logger.LogError(ex, $"Failed to register door state: {relativeUri} - {ex.Message}");
+        }
+    }
+
+    private async Task StoreInvalidRfidAsync(string rfid, CancellationToken stoppingToken)
+    {
+        try
+        {
+            using var httpClient = GetHttpClient();
+            var content = new StringContent(rfid, Encoding.UTF8, "text/plain");
+            var response = await httpClient.PostAsync(InvalidRfidCardsApiEndpoint, content, stoppingToken);
+            response.EnsureSuccessStatusCode();
+            _logger.LogInformation($"Successfully stored RFID: {rfid}");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Failed to store RFID: {rfid} - {ex.Message}");
         }
     }
 

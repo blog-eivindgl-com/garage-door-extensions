@@ -20,11 +20,12 @@ if (builder.Environment.IsDevelopment() && Environment.GetEnvironmentVariable("D
 }
 
 // Add services to the container.
-builder.Services.AddEntityFrameworkSqlite()
-    .AddDbContext<GarageDoorExtensionsDbContext>(options =>
+builder.Services.AddDbContext<GarageDoorExtensionsDbContext>(options =>
         options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
         
 builder.Services.AddSingleton<IDateTimeService, DateTimeService>();
+
+// Door Openings Service
 var doorOpeningServiceType = builder.Configuration.GetValue<string>("DoorOpeningsService:Type");
 switch (doorOpeningServiceType)
 {
@@ -40,6 +41,19 @@ switch (doorOpeningServiceType)
 }
 
 builder.Services.AddSingleton<IDoorOpeningsService, DoorOpeningsFileSystemService>();
+
+// RFID Storage Service
+var rfidStorageServiceType = builder.Configuration.GetValue<string>("RfidStorageService:Type");
+switch (rfidStorageServiceType)
+{
+    case "FileSystem":
+        builder.Services.Configure<RfidStorageFileSystemOptions>(builder.Configuration.GetSection("RfidStorageService"));
+        builder.Services.AddSingleton<IRfidStorage, RfidStorageFileSystemService>();
+        break;
+    default:
+        throw new InvalidOperationException("Invalid RfidStorageService type configured");
+}
+
 builder.Services.AddControllers(); // This supports attribute routing better than AddControllersWithViews for APIs
 builder.Services.AddControllersWithViews();
 

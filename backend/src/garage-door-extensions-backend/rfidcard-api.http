@@ -21,6 +21,10 @@ GET {{baseUrl}}{{apiPath}}/abcdef02
 Accept: application/json
 ###
 
+### Get invalid RFID cards
+GET {{baseUrl}}{{apiPath}}/invalid
+Accept: application/json
+
 ### Add RFID Card
 POST {{baseUrl}}{{apiPath}}
 Content-Type: application/json
@@ -46,6 +50,13 @@ Content-Type: application/json
   "belongingUserId": "00000000-0000-0000-0000-000000000000",
   "belongingApartment": null
 }
+###
+
+### Register invalid RFID Card
+POST {{baseUrl}}{{apiPath}}/invalid
+Content-Type: text/plain
+
+abcdef03
 ###
 
 ### Make RFID Card valid for door

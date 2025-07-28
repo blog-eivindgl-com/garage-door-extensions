@@ -1,4 +1,5 @@
 using BlogEivindGLCom.GarageDoorExtensionsBackend.Model;
+using BlogEivindGLCom.GarageDoorExtensionsBackend.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -7,10 +8,12 @@ using Microsoft.EntityFrameworkCore;
 public class RfidCardsController : ControllerBase
 {
     private readonly GarageDoorExtensionsDbContext _dbContext;
+    private readonly IRfidStorage _rfidStorage;
 
-    public RfidCardsController(GarageDoorExtensionsDbContext dbContext)
+    public RfidCardsController(GarageDoorExtensionsDbContext dbContext, IRfidStorage rfidStorage)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _rfidStorage = rfidStorage ?? throw new ArgumentNullException(nameof(rfidStorage));
     }
 
     [HttpGet]
@@ -68,13 +71,46 @@ public class RfidCardsController : ControllerBase
     [HttpGet("free")]
     public async Task<ActionResult<IEnumerable<RfidCard>>> GetFreeRfidCards()
     {
-        var freeRfidCards = _dbContext.RfidCards
+        var freeRfidCards = await _dbContext.RfidCards
             .Where(card => card.BelongingUserId == Guid.Empty && string.IsNullOrWhiteSpace(card.BelongingApartment))
-            .ToList();
+            .ToListAsync();
 
         return Ok(freeRfidCards);
     }
+
+    [HttpGet("invalid")]
+    public ActionResult<IEnumerable<InvalidRfid>> GetInvalidRfids([FromQuery] DateTime? from = null, [FromQuery] DateTime? to = null)
+    {
+        if (from.HasValue && to.HasValue && from > to)
+        {
+            return BadRequest("From date cannot be later than To date.");
+        }
+
+        IEnumerable<InvalidRfid> invalidRfids;
+        if (!from.HasValue)
+        {
+            invalidRfids = _rfidStorage.GetAllInvalidRfids();
+        }
+        else
+        {
+            invalidRfids = _rfidStorage.GetInvalidRfids(from.Value, to);
+        }
+        
+        return Ok(invalidRfids);
+    }
     
+    [HttpGet("invalid/{from}/{to}")]
+    public ActionResult<IEnumerable<InvalidRfid>> GetInvalidRfids(DateTime from, DateTime to)
+    {
+        if (from > to)
+        {
+            return BadRequest("From date cannot be later than To date.");
+        }
+
+        var invalidRfids = _rfidStorage.GetInvalidRfids(from, to);
+        return Ok(invalidRfids);
+    }
+
     [HttpPost]
     public async Task<IActionResult> AddRfidCard([FromBody] RfidCard rfidCard)
     {
@@ -177,6 +213,28 @@ public class RfidCardsController : ControllerBase
         await _dbContext.SaveChangesAsync();
 
         return NoContent();
+    }
+
+    [HttpPost("invalid")]
+    public async Task<IActionResult> StoreInvalidRfid()
+    {
+        using var reader = new StreamReader(Request.Body);
+        var rfid = await reader.ReadToEndAsync();
+        
+        if (string.IsNullOrWhiteSpace(rfid))
+        {
+            return BadRequest("RFID card value is required");
+        }
+
+        try
+        {
+            _rfidStorage.StoreRfid(rfid);
+            return Ok();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, $"Internal server error: {ex.Message}");
+        }
     }
 
     [HttpPost("valid-for-door")]
