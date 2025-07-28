@@ -91,4 +91,28 @@ public class DoorsController : ControllerBase
         await _dbContext.SaveChangesAsync();
         return NoContent();
     }
+
+   [HttpPost("{doorId}/publishValidRfidCards")]
+   public async Task<IActionResult> PublishValidRfidCards(string doorId)
+   {
+        if (string.IsNullOrWhiteSpace(doorId))
+        {
+            return BadRequest("Invalid door ID.");
+        }
+
+        var door = await _dbContext.Doors.FindAsync(doorId);
+        if (door == null)
+        {
+            return NotFound();
+        }
+
+        // TODO: Publish a message to have the worker service explicitly update the specified door's valid RFID cards.
+        /*await _mqttClient.PublishAsync(new MqttApplicationMessageBuilder()
+            .WithTopic($"garageDoor/updateValidRfidCards/{doorId}")
+            .WithPayload("")
+            .WithAtLeastOnceQoS()
+            .Build());*/
+
+        return NoContent();
+   }
 }

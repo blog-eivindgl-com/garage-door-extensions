@@ -10,6 +10,7 @@ public class RfidStorageFileSystemService : IRfidStorage
     private readonly ILogger<RfidStorageFileSystemService> _logger;
     private readonly IDateTimeService _dateTimeService;
     private string _invalidRfidsPath;
+    private string _validRfidsPath;
 
     public RfidStorageFileSystemService(IOptions<RfidStorageFileSystemOptions> options, ILogger<RfidStorageFileSystemService> logger, IDateTimeService dateTimeService)
     {
@@ -26,6 +27,7 @@ public class RfidStorageFileSystemService : IRfidStorage
             basePath = Path.Combine(AppContext.BaseDirectory, "data");
         }
         _invalidRfidsPath = Path.Combine(basePath, "invalid-rfids");
+        _validRfidsPath = Path.Combine(basePath, "valid-rfids");
     }
 
     public void StoreRfid(string rfid)

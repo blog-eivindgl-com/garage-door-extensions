@@ -31,4 +31,15 @@ public class GarageDoorExtensionsDbContext : DbContext
             .HasForeignKey(v => v.Rfid)
             .OnDelete(DeleteBehavior.Cascade);
     }
+
+    public async Task<string> GetValidRfidCardsForDoorAsync(string doorId)
+    {
+        // Implementation to retrieve valid RFID cards for a specific door
+        return string.Join("\n", await RfidCardValidForDoors
+            .Where(v => v.DoorId == doorId && v.ValidFrom <= DateTime.UtcNow && (DateTime.UtcNow <= v.ValidTo || v.ValidTo == null))
+            .OrderBy(v => v.Rfid)
+            .Select(v => v.Rfid)
+            .Distinct()
+            .ToListAsync());
+    }
 }
