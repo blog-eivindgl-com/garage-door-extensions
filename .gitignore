@@ -403,3 +403,6 @@ FodyWeavers.xsd
 *.db
 *.db-shm
 *.db-wal
+
+# File storage for the Garage Door Extensions backend
+backend/src/garage-door-extensions-backend/data/
