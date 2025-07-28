@@ -52,6 +52,18 @@ if (builder.Environment.IsDevelopment())
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<GarageDoorExtensionsDbContext>();
+
+    if (dbContext.Database.GetPendingMigrations().Any())
+    {
+        var logger = app.Services.GetRequiredService<ILogger<Program>>();    
+        logger.LogInformation("Applying pending migrations...");
+        dbContext.Database.Migrate();
+    } 
+}
+
 // Debug: List all registered routes in development
 if (app.Environment.IsDevelopment())
 {

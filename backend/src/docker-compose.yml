@@ -14,18 +14,6 @@ services:
       - garage-door-network
     restart: unless-stopped
   
-  garage-door-backend-migrations:
-    build:
-      context: .
-      dockerfile: garage-door-extensions-backend/Dockerfile.Migrations
-    container_name: garage-door-backend-migrations
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:8080
-      - DOTNET_RUNNING_IN_CONTAINER=true
-      - ConnectionStrings__DefaultConnection=Data Source=/data/garage_door_extensions.db
-    restart: "no"
-
   garage-door-service:
     build:
       context: .
