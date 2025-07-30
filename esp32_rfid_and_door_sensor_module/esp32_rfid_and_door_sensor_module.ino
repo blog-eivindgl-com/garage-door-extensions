@@ -36,6 +36,7 @@ char doorSensorState[7] = "closed";
 std::atomic<bool> doorSensorStateChanged = false;
 unsigned long doorSensorChangedTime = 0;
 std::vector<String> validRfidValues = { };
+String updateValidRfidCardsTopic = "garageDoor/updateValidRfidCards/" + String(doorId);  // Provide doorId as a const *char to identify the door in MQTT messages in parameters.h
 
 // Learn more about using SPI/I2C or check the pin assigment for your board: https://github.com/OSSLibraries/Arduino_MFRC522v2#pin-layout
 MFRC522DriverPinSimple ss_pin(5);
@@ -119,6 +120,16 @@ void incomingMqttMessage(char *topic, uint8_t *message, unsigned int length) {
       strncpy(doorSensorState, "closed", 7);
       doorSensorStateChanged = true;
     }
+  } else if(strcmp(topic, "garageDoor/queryValidRfidCards") == 0) {
+    String mqttContent = String(doorId) + "\n";
+    for (String validRfid : validRfidValues) {
+      mqttContent += validRfid + "\n";
+    }
+    mqttClient.publish("garageDoor/validRfid", mqttContent.c_str());
+    Serial.println("Published valid RFID Cards to garageDoor/validRfid");
+  } else if (strcmp(topic, updateValidRfidCardsTopic.c_str()) == 0) {
+    UpdateFileOfValidRfidValues(value);
+    ReadFileOfValidRfidValues();
   }
 }
 
@@ -158,6 +169,18 @@ void subscribeToMqttTopics() {
     Serial.println("Subscribed to topic: garageDoor/queryDeviceStatus");
   } else {
     Serial.println("Failed to subscribe to topic!");
+  }
+
+  if (mqttClient.subscribe("garageDoor/queryValidRfidCards")) {
+    Serial.println("Subscribed to topic: garageDoor/queryValidRfidCards");
+  } else {
+    Serial.println("Failed to subscribe to topic!");
+  }
+
+  if (mqttClient.subscribe(updateValidRfidCardsTopic.c_str())) {
+    Serial.printf("Subscribed to topic: %s/\n", updateValidRfidCardsTopic.c_str());
+  } else {
+    Serial.println("Failed to subscribe to updateValidRfidCards topic!");
   }
 }
 
