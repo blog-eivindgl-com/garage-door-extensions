@@ -393,14 +393,14 @@ void loop() {
     }
     uidString += String(mfrc522.uid.uidByte[i], HEX);
   }
-
-  if (uidString != "") {
-if (ValidateRfid(uidString)) {
-      AccessGranted();
-      Serial.printf("Opened door for RFID %s\n", uidString);
-    } else {
-      Serial.printf("WARNING: %s is NOT valid for this door\n", uidString);
-    }
+  
+  if (ValidateRfid(uidString)) {
+    AccessGranted();
+    Serial.printf("Opened door for RFID %s\n", uidString);
+  } else {
+    Serial.printf("WARNING: %s is NOT valid for this door\n", uidString);
+    mqttClient.publish("garageDoor/invalidRfid", uidString.c_str());
+    Serial.println("MQTT message about invalid RFID sent.");
   }
 
   delay(100);
