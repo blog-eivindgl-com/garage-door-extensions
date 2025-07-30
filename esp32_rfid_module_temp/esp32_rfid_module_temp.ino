@@ -35,7 +35,7 @@ const int BlueLedPin = 26;
 const int GreenLedPin = 27;
 const int OpenDoorPin = 25;
 std::vector<String> validRfidValues = { };
-//String updateValidRfidCardsTopic = "garageDoor/updateValidRfidCards/" + doorId;
+String updateValidRfidCardsTopic = "garageDoor/updateValidRfidCards/" + String(doorId);
 
 // Learn more about using SPI/I2C or check the pin assigment for your board: https://github.com/OSSLibraries/Arduino_MFRC522v2#pin-layout
 MFRC522DriverPinSimple ss_pin(5);
@@ -157,9 +157,17 @@ void incomingMqttMessage(char *topic, uint8_t *message, unsigned int length) {
       strncpy(doorSensorState, "closed", 7);
       doorSensorStateChanged = true;
     }
-  } /*else if (strcmp(topic, updateValidRfidCardsTopic) == 0) {
+  } else if(strcmp(topic, "garageDoor/queryValidRfidCards") == 0) {
+    String mqttContent = String(doorId) + "\n";
+    for (String validRfid : validRfidValues) {
+      mqttContent += validRfid + "\n";
+    }
+    mqttClient.publish("garageDoor/validRfid", mqttContent.c_str());
+    Serial.println("Published valid RFID Cards to garageDoor/validRfid");
+  } else if (strcmp(topic, updateValidRfidCardsTopic.c_str()) == 0) {
     UpdateFileOfValidRfidValues(value);
-  }*/
+    ReadFileOfValidRfidValues();
+  }
 }
 
 void reconnectMqttBroker() {
@@ -185,11 +193,17 @@ void subscribeToMqttTopics() {
     Serial.println("Failed to subscribe to topic!");
   }
 
-  /*if (mqttClient.subscribe(updateValidRfidCardsTopic)) {
-    Serial.println("Subscribed to topic: garageDoor/updateValidRfidCards/" + doorId);
+  if (mqttClient.subscribe("garageDoor/queryValidRfidCards")) {
+    Serial.println("Subscribed to topic: garageDoor/queryValidRfidCards");
+  } else {
+    Serial.println("Failed to subscribe to topic!");
+  }
+
+  if (mqttClient.subscribe(updateValidRfidCardsTopic.c_str())) {
+    Serial.printf("Subscribed to topic: %s/\n", updateValidRfidCardsTopic.c_str());
   } else {
     Serial.println("Failed to subscribe to updateValidRfidCards topic!");
-  }*/
+  }
 }
 
 // Flashes both LEDs and beeps to verify that components are OK
@@ -270,6 +284,12 @@ void setup() {
 }
 
 void loop() {
+  if (!mqttClient.connected()) {
+    reconnectMqttBroker();
+  }
+
+  mqttClient.loop(); // Process incoming MQTT messages
+
   // Reset the loop if no new card present on the sensor/reader. This saves the entire process when idle.
   if (!mfrc522.PICC_IsNewCardPresent()) {
     // Flash blue LED on an off without affecting RFID reader
