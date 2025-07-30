@@ -1,16 +1,30 @@
 using BlogEivindGLCom.GarageDoorExtensionsBackend.Model;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using MQTTnet;
 
 [ApiController]
 [Route("api/[controller]")]
 public class DoorsController : ControllerBase
 {
+    private const string QueryValidRfidCardsTopic = "garageDoor/queryValidRfidCards";
     private readonly GarageDoorExtensionsDbContext _dbContext;
+    private readonly IMqttClient _mqttClient;
+    private readonly MQTTnet.MqttClientOptions _mqttClientOptions;
+    private readonly ILogger<DoorsController> _logger;
 
-    public DoorsController(GarageDoorExtensionsDbContext dbContext)
+    public DoorsController(GarageDoorExtensionsDbContext dbContext, IOptions<MqttClientOptions> mqttClientOptions, ILogger<DoorsController> logger)
     {
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+        var mqttFactory = new MqttClientFactory();
+        _mqttClient = mqttFactory.CreateMqttClient();
+        _mqttClientOptions = new MqttClientOptionsBuilder()
+            .WithTcpServer(mqttClientOptions.Value.BrokerAddress, port: mqttClientOptions.Value.Port)
+            .WithCredentials(mqttClientOptions.Value.Username, mqttClientOptions.Value.Password)
+            .Build();
     }
 
     [HttpGet]
@@ -92,26 +106,32 @@ public class DoorsController : ControllerBase
         return NoContent();
     }
 
-   [HttpPost("{doorId}/publishValidRfidCards")]
-   public async Task<IActionResult> PublishValidRfidCards(string doorId)
+   [HttpPost("publishValidRfidCards")]
+   public async Task<IActionResult> PublishValidRfidCards()
    {
-        if (string.IsNullOrWhiteSpace(doorId))
-        {
-            return BadRequest("Invalid door ID.");
-        }
+        _logger.LogInformation("MQTT client is not connected, attempting to connect...");
 
-        var door = await _dbContext.Doors.FindAsync(doorId);
-        if (door == null)
+        // Publish a message to have all doors query their valid RFID cards
+        using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5)))
         {
-            return NotFound();
-        }
+            var result = await _mqttClient.ConnectAsync(_mqttClientOptions, cts.Token);
 
-        // TODO: Publish a message to have the worker service explicitly update the specified door's valid RFID cards.
-        /*await _mqttClient.PublishAsync(new MqttApplicationMessageBuilder()
-            .WithTopic($"garageDoor/updateValidRfidCards/{doorId}")
-            .WithPayload("")
-            .WithAtLeastOnceQoS()
-            .Build());*/
+            if (result.ResultCode != MQTTnet.MqttClientConnectResultCode.Success)
+            {
+                _logger.LogError($"Failed to connect to MQTT broker: {result.ReasonString}");
+                return StatusCode(500, "Failed to connect to MQTT broker."); // Exit if connection fails
+            }
+
+            _logger.LogInformation("The MQTT client is connected.");
+
+            await _mqttClient.PublishAsync(new MqttApplicationMessageBuilder()
+               .WithTopic(QueryValidRfidCardsTopic)
+               .Build(), cts.Token);
+       
+            await _mqttClient.DisconnectAsync();
+        } 
+
+        _logger.LogInformation("Published MQTT message for all doors to query valid RFID cards.");
 
         return NoContent();
    }

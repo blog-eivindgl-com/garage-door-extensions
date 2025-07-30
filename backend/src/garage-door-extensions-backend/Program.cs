@@ -54,6 +54,9 @@ switch (rfidStorageServiceType)
         throw new InvalidOperationException("Invalid RfidStorageService type configured");
 }
 
+// MQTT Client for DoorsController
+builder.Services.Configure<MqttClientOptions>(builder.Configuration.GetSection("MqttClientOptions"));
+
 builder.Services.AddControllers(); // This supports attribute routing better than AddControllersWithViews for APIs
 builder.Services.AddControllersWithViews();
 
