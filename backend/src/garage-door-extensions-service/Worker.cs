@@ -1,8 +1,10 @@
 using System.Net;
+using System.Net.Http.Json;
 using System.Runtime.CompilerServices;
 using System.Text;
 using Microsoft.Extensions.Options;
 using MQTTnet;
+using BlogEivindGLCom.GarageDoorExtensionsBackend.Model;
 
 namespace BlogEivindGLCom.GarageDoorExtensionsBackend.Service;
 
@@ -15,6 +17,9 @@ public class Worker : BackgroundService
     private const string AlertTopic = "garageDoor/alert";
     private const string AlertMessageDurationPlaceholder = "{duration}";
     private const string InvalidRfidTopic = "garageDoor/invalidRfid";
+    private const string QueryValidRfidCardsTopic = "garageDoor/queryValidRfidCards";
+    private const string ValidRfidTopic = "garageDoor/validRfid";
+    private const string UpdateValidRfidCardsTopic = "garageDoor/updateValidRfidCards/{doorId}";
     private const string OpeningState = "opening";
     private const string ClosedState = "closed";
     private const string OpeningApiEndpoint = "api/dooropenings/RegisterDoorOpening";
@@ -29,6 +34,7 @@ public class Worker : BackgroundService
     private readonly ILogger<Worker> _logger;
     private DateTime? _lastPing;
     private DateTime? _lastAlertCheck;
+    private DateTime? _lastValidRfidCardsCheck;
     private long _alertSentForDoorOpenedAt = 0; // Timestamp of the time that the door was opened for the last alert sent. Used to prevent multiple alerts for the same door open event.
     private bool disposed = false;
 
@@ -64,6 +70,7 @@ public class Worker : BackgroundService
             .WithTopicFilter(GarageDoorStateChangedTopic)
             .WithTopicFilter(GarageDoorQueryStateTopic)
             .WithTopicFilter(InvalidRfidTopic)
+            .WithTopicFilter(ValidRfidTopic)
             .Build();
     }
 
@@ -81,6 +88,13 @@ public class Worker : BackgroundService
 
             // Publish MQTT message for failure when the garage door i not closed after a certain time
             await AlertOnDoorNotClosedAsync(stoppingToken);
+
+            // At midnight, compare valid RFID cards and possibly update doors
+            if (DateTime.Now.TimeOfDay.TotalSeconds < 60 && (!_lastValidRfidCardsCheck.HasValue || (_lastValidRfidCardsCheck.Value.Date != DateTime.Now.Date)))
+            {
+                _lastValidRfidCardsCheck = DateTime.Now;
+                await CompareValidRfidCardsAndPossiblyUpdateDoorsAsync(stoppingToken);
+            }
 
             // Wait for a while before the next iteration
             await Task.Delay(1000, stoppingToken);
@@ -144,6 +158,16 @@ public class Worker : BackgroundService
                     await StoreInvalidRfidAsync(rfid, cts.Token);
                 }
             }
+            else if (ValidRfidTopic.Equals(e.ApplicationMessage.Topic, StringComparison.InvariantCultureIgnoreCase))
+            {
+                var currentValidRfidCardsAtDoor = Encoding.UTF8.GetString(e.ApplicationMessage.Payload);
+                _logger.LogInformation($"Received valid RFID: {currentValidRfidCardsAtDoor}");
+
+                using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15)))
+                {
+                    await CompareValidRfidCardsAndPossiblyUpdateDoorAsync(currentValidRfidCardsAtDoor, cts.Token);
+                }
+            }
             else
             {
                 _logger.LogWarning($"Unhandled topic: {e.ApplicationMessage.Topic}");
@@ -184,6 +208,109 @@ public class Worker : BackgroundService
         catch (Exception ex)
         {
             _logger.LogError(ex, $"Failed to store RFID: {rfid} - {ex.Message}");
+        }
+    }
+
+    private async Task CompareValidRfidCardsAndPossiblyUpdateDoorsAsync(CancellationToken stoppingToken)
+    {
+        // Query all doors for their current valid RFID cards.
+        // Incoming messages on topic garageDoor/validRfid will trigger a comparison of current vs new and possibly update the door.
+        try
+        {
+            _logger.LogInformation($"Query all doors for their valid RFID cards.");
+            await _mqttClient.PublishAsync(new MqttApplicationMessageBuilder()
+                .WithTopic(QueryValidRfidCardsTopic)
+                .Build(), stoppingToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Failed to query valid RFID cards for doors: {ex.Message}");
+        }
+    }   
+
+    private async Task CompareValidRfidCardsAndPossiblyUpdateDoorAsync(string currentValidRfidCardsAtDoor, CancellationToken stoppingToken)
+    {
+        try
+        {
+            // First line should be the door ID, rest are valid RFID cards
+            var lines = currentValidRfidCardsAtDoor.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+            if (lines.Length == 0)
+            {
+                _logger.LogWarning("No valid RFID cards received, skipping comparison.");
+                return;
+            }
+
+            var doorId = lines[0].Trim();
+            if (string.IsNullOrWhiteSpace(doorId))  
+            {
+                _logger.LogWarning("Door ID is empty, skipping comparison.");
+                return;
+            }
+
+            using var httpClient = GetHttpClient();
+            var response = await httpClient.GetAsync($"api/doors/{Uri.EscapeDataString(doorId)}", stoppingToken);
+            response.EnsureSuccessStatusCode();
+            var door = await response.Content.ReadFromJsonAsync<DoorViewModel>(cancellationToken: stoppingToken);
+
+            if (door == null)
+            {
+                _logger.LogWarning($"Door with ID {doorId} not found, skipping comparison.");
+                return;
+            }
+
+            // Filter valid RFID cards by the from and to dates
+            var validRfidCards = (from v in door.ValidRfidCards
+                            where v.ValidFrom <= DateTime.UtcNow && 
+                                (v.ValidTo == null || DateTime.UtcNow <= v.ValidTo)
+                            orderby v.Rfid
+                            select (v.Rfid)).Distinct();
+
+            // Compare the valid RFID cards from the API with the ones received
+            bool needsUpdate = false;
+            if (lines.Length - 1 != validRfidCards.Count())
+            {
+                needsUpdate = true;
+            }
+            else
+            {
+                for (int i = 1; i < lines.Length; i++)
+                {
+                    if (!validRfidCards.Contains(lines[i].Trim()))
+                    {
+                        needsUpdate = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!needsUpdate)
+            {
+                _logger.LogInformation($"No changes detected in valid RFID cards for door {doorId}, skipping update.");
+                return;
+            }
+
+            _logger.LogInformation($"Door {doorId} must update list of valid RFID cards.");
+            
+            // Prepare the MQTT message to update the door with the new valid RFID cards
+            var content = new StringBuilder();
+            foreach (var rfid in validRfidCards)
+            {
+                content.Append(rfid);
+                content.Append('\n');
+            }
+
+            _logger.LogInformation($"Updating door {doorId} with valid RFID cards: {content}");
+
+            // Publish an MQTT message to update the door with the new valid RFID cards
+            await _mqttClient.PublishAsync(new MqttApplicationMessageBuilder()
+                .WithTopic(UpdateValidRfidCardsTopic.Replace("{doorId}", Uri.EscapeDataString(doorId)))
+                .WithPayload(content.ToString())
+                .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
+                .Build(), stoppingToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"Failed to compare valid RFID cards for door: {ex.Message}");
         }
     }
 

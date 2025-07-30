@@ -11,4 +11,8 @@
     <ProjectReference Include="../garage-door-extensions-backend-services/garage-door-extensions-backend-services.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="MQTTnet" Version="5.0.1.1416" />
+  </ItemGroup>
+
 </Project>
