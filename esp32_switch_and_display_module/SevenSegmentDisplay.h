@@ -33,9 +33,13 @@ private:
     std::vector<int> digitPins;
     std::vector<int> segmentPins;
     std::vector<std::vector<int>> digitMappings;
+    std::vector<std::vector<int>> letterMappings;
+    void displayText(char* text);
+    void displayNumber(int number);
     void turnOffAllSegments();
     void turnOnDigitSegments(int digit);
     void turnOnDigitSegment(int digitPin, int digitValue);
+    void turnOnLetterSegments(char letter);
 };
 
 #endif

@@ -5,6 +5,7 @@ Switch and display module is almost complete on breadboards. The only thing left
 ![Tinkercad sketch](switch_and_display_module.png)
 
 ## ESP32 WROOM 32D board is visualized as four 8-pin headers in the sketch.
+ - D32 is used to receive a signal from the [VO617A Optocoupler](https://mou.sr/45uYfCM), but still simulated by a regular pushbutton. This is the green wire.
  - D33 is used to receive a signal from the RFID and door sensor module to open the door. This is the brown wire going out of the sketch into D25 of the other ESP WROOM 32D board.
  - D25 is the yellow wire going through a 1kΩ resistor to the Base (B, left pin) of the [TIP120 Darlington Transistor](https://mou.sr/4l0KVe1)
  - D26 is the green wire going to the push button used to select which value to display (day/week/month)
