@@ -13,6 +13,7 @@ const int WeekLedPin = 14;
 const int MonthLedPin = 27;
 const int OpenDoorPin = 25;
 const int InputOpenDoorPin = 33;
+const int EmergencyStopPin = 32;
 std::vector<int> indicatorLedPins = { DayLedPin, WeekLedPin, MonthLedPin };
 int dayCounter = 0;
 int weekCounter = 0;
@@ -22,6 +23,8 @@ volatile bool buttonState = false;
 volatile bool buttonStateChanged = false;
 volatile bool openDoorState = false;
 volatile bool openDoorStateChanged = false;
+volatile bool emergencyStopState = false;
+volatile bool emergencyStopStateChanged = false;
 
 const DigitPins digitPins = {
   .onesDigit = 5,
@@ -61,6 +64,30 @@ void checkButtonState() {
     cycleSelector();
     buttonStateChanged = false;
   }
+}
+
+void IRAM_ATTR handleEmergencyStopInterrupt() {
+  if (digitalRead(EmergencyStopPin) == LOW) {
+    emergencyStopState = true;
+    emergencyStopStateChanged = true;
+  } else {
+    emergencyStopState = false;
+    emergencyStopStateChanged = true;
+  }
+}
+
+void checkEmergencyStopState() {
+  if (emergencyStopStateChanged && emergencyStopState) {
+    // Emergency stop is pressed/held - send MQTT message to update backend and Home Assistant to avoid alert about an open door
+    mqttClient.publish("garage_door_emergency_stop_sensor/state", "PRESSED");
+    // loop has logic to display text StoP instead of the normal number as long as emergencyStopState == true
+  } else if (emergencyStopStateChanged) {
+    // Emergency stop is released - send MQTT message to update backend and Home Assistant
+    mqttClient.publish("garage_door_emergency_stop_sensor/state", "RELEASED");
+    // loop has logic to display go back to the normal numeric display when emergencyStopState == false
+  }
+
+  emergencyStopStateChanged = false;
 }
 
 /* This function is used to cycle the display digit for testing the display.
@@ -259,6 +286,21 @@ void incomingMqttMessage(char *topic, uint8_t *message, unsigned int length) {
   }
 }
 
+void publishDiscoveryMqttMessage() {
+  String discoveryMessage = "{"
+    "\"name\": \"Garage Door Emergency Stop Button\","
+    "\"unique_id\": \"garage_door_emergency_stop_sensor\","
+    "\"state_topic\": \"garage_door_emergency_stop_sensor/state\","
+    "\"payload_on\": \"PRESSED\","
+    "\"payload_off\": \"RELEASED\","
+    "\"device_class\": \"button\","
+    "\"icon\": \"mdi:garage\""
+  "}";
+
+  Serial.println("Publishing Home Assistant Binary Sensor Discovery Message");
+  mqttClient.publish("homeassistant/binary_sensor/garage_door_emergency_stop_sensor/config", discoveryMessage.c_str(), true); // true means the message is retained when HA is restarted
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -270,6 +312,10 @@ void setup() {
     pinMode(pin, OUTPUT);
     digitalWrite(pin, LOW);
   }
+
+  // Setup emergency stop pin for input
+  pinMode(EmergencyStopPin, INPUT_PULLUP);
+  attachInterrupt(EmergencyStopPin, handleEmergencyStopInterrupt, CHANGE);
 
   // Setup open door pin for output and signal pin from RFID module for input
   pinMode(OpenDoorPin, OUTPUT);
@@ -331,6 +377,9 @@ void setup() {
     reconnectMqttBroker();
   }
 
+  // Register this device as a sensor for the emergency stop button in Home Assistant
+  publishDiscoveryMqttMessage();
+
   Serial.println("Query backend for current state of the garage door counters...");
   queryCounter();
 }
@@ -360,7 +409,14 @@ void loop() {
 
   // Ensure display refresh happens ~every 5ms
   if (millis() - lastUpdateTime >= 5) {
-    display.updateDisplay(currentDisplayDigit);
+    if (emergencyStopState) {
+      // Display text StoP instead of the normal number
+      display.updateDisplay(-1);
+    } else {
+      // Display the normal number
+      display.updateDisplay(currentDisplayDigit);
+    }
+    
     lastUpdateTime = millis();  // Reset timing
   }
 }

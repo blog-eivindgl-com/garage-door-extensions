@@ -18,6 +18,18 @@ SevenSegmentDisplay::SevenSegmentDisplay(const DigitPins& digPins, const Segment
         {segPins.top, segPins.upperRight, segPins.lowerRight, segPins.bottom, segPins.lowerLeft, segPins.upperLeft, segPins.center},  // Display_8
         {segPins.top, segPins.upperRight, segPins.center, segPins.upperLeft, segPins.lowerRight}  // Display_9
     };
+
+    letterMappings = {
+        {segPins.top, segPins.upperLeft, segPins.center, segPins.lowerRight, segPins.bottom},  // Display_S
+        {segPins.upperLeft, segPins.center, segPins.lowerLeft, segPins.bottom},  // Display_t
+        {segPins.lowerLeft, segPins.center, segPins.lowerRight, segPins.bottom},  // Display_o
+        {segPins.top, segPins.upperLeft, segPins.center, segPins.lowerLeft, segPins.upperRight},  // Display_P
+        {segPins.top, segPins.upperLeft, segPins.center, segPins.lowerLeft},  // Display_F
+        {segPins.top, segPins.upperLeft, segPins.center, segPins.lowerLeft, segPins.bottom},  // Display_E
+        {segPins.upperLeft, segPins.lowerLeft},  // Display_I
+        {segPins.upperLeft, segPins.lowerLeft, segPins.bottom},  // Display_L
+        {segPins.center}  // Diplay -
+    };
 }
 
 void SevenSegmentDisplay::begin() {
@@ -36,8 +48,105 @@ void SevenSegmentDisplay::clearDisplay() {
 }
 
 void SevenSegmentDisplay::updateDisplay(int number) {
-    if (number < 0 || number > 9999) return;
+    if (number < -2 || number > 9999) return;
 
+    // Negative number have special meaning to simplify displaying two specific words
+    if (number == -1) {
+        // -1 should display text STOP when emergency stop button is held
+        displayText("StoP");
+    } else if (number == -2) {
+        // -2 should display text FEIL (Norwegian for error) when door is open for very long and the emergency stop button is not held
+        displayText("FEIL");
+    } else {
+        // display numbers 0-9999 using common logic for numbers
+        displayNumber(number);
+    }    
+}
+
+void SevenSegmentDisplay::displayText(char* text) {
+    if (strcmp(text, "StoP") == 0) {
+        // Multiplexing: Cycle through each letter quickly
+        digitalWrite(digitPins[0], LOW);  // Turn off fourth character
+        
+        // Display an S
+        digitalWrite(digitPins[3], HIGH);  // Turn on first character
+        turnOnLetterSegments('S');
+        delayMicroseconds(5000);  // Small delay for persistence
+
+        // Display a t
+        digitalWrite(digitPins[3], LOW);  // Turn off first character
+        digitalWrite(digitPins[2], HIGH);  // Turn on second character
+        turnOnLetterSegments('t');
+        delayMicroseconds(5000);  // Small delay for persistence
+
+        // Display an o
+        digitalWrite(digitPins[2], LOW);  // Turn off second character
+        digitalWrite(digitPins[1], HIGH);  // Turn on third character
+        turnOnLetterSegments('o');
+        delayMicroseconds(5000);  // Small delay for persistence
+
+        // Display a P
+        digitalWrite(digitPins[1], LOW);  // Turn off third character
+        digitalWrite(digitPins[0], HIGH);  // Turn on fourth character
+        turnOnLetterSegments('P');
+        delayMicroseconds(5000);  // Small delay for persistence
+    } else if (strcmp(text, "FEIL") == 0) {
+        // Multiplexing: Cycle through each letter quickly
+        digitalWrite(digitPins[0], LOW);  // Turn off fourth character
+        
+        // Display an F
+        digitalWrite(digitPins[3], HIGH);  // Turn on first character
+        turnOnLetterSegments('F');
+        delayMicroseconds(5000);  // Small delay for persistence
+
+        // Display an E
+        digitalWrite(digitPins[3], LOW);  // Turn off first character
+        digitalWrite(digitPins[2], HIGH);  // Turn on second character
+        turnOnLetterSegments('E');
+        delayMicroseconds(5000);  // Small delay for persistence
+
+        // Display an I
+        digitalWrite(digitPins[2], LOW);  // Turn off second character
+        digitalWrite(digitPins[1], HIGH);  // Turn on third character
+        turnOnLetterSegments('I');
+        delayMicroseconds(5000);  // Small delay for persistence
+
+        // Display an L
+        digitalWrite(digitPins[1], LOW);  // Turn off third character
+        digitalWrite(digitPins[0], HIGH);  // Turn on fourth character
+        turnOnLetterSegments('L');
+        delayMicroseconds(5000);  // Small delay for persistence
+    } else {
+        // Unsupported word, write ---- on the display
+        // Multiplexing: Cycle through each letter quickly
+        digitalWrite(digitPins[0], LOW);  // Turn off fourth character
+        
+        // Display character -
+        digitalWrite(digitPins[3], HIGH);  // Turn on first character
+        turnOnLetterSegments('-');
+        delayMicroseconds(5000);  // Small delay for persistence
+
+        // Display character -
+        digitalWrite(digitPins[3], LOW);  // Turn off first character
+        digitalWrite(digitPins[2], HIGH);  // Turn on second character
+        turnOnLetterSegments('-');
+        delayMicroseconds(5000);  // Small delay for persistence
+
+        // Display character -
+        digitalWrite(digitPins[2], LOW);  // Turn off second character
+        digitalWrite(digitPins[1], HIGH);  // Turn on third character
+        turnOnLetterSegments('-');
+        delayMicroseconds(5000);  // Small delay for persistence
+
+        // Display character -
+        digitalWrite(digitPins[1], LOW);  // Turn off third character
+        digitalWrite(digitPins[0], HIGH);  // Turn on fourth character
+        turnOnLetterSegments('-');
+        delayMicroseconds(5000);  // Small delay for persistence
+    }
+}
+
+void SevenSegmentDisplay::displayNumber(int number) {
     // Extract inidividual digits
     int thousands = (number / 1000) % 10;
     int hundreds = (number / 100) % 10;
@@ -92,6 +201,41 @@ void SevenSegmentDisplay::turnOnDigitSegments(int digit) {
 
     // Turn on segments corresponding to the digit
     for (int pin: digitMappings[digit]) {
+        digitalWrite(pin, LOW);
+    }
+}
+
+void SevenSegmentDisplay::turnOnLetterSegments(char letter)
+{
+    // Turn off all segment before tuning on the ones that should be on
+    for (int pin: segmentPins) {
+        digitalWrite(pin, HIGH);
+    }
+
+    // Turn on segments corresponding to the letter
+    std::vector<int> letterMapping;
+    if (letter == 'S') {
+        letterMapping = letterMappings[0];
+    } else if (letter == 't') {
+        letterMapping = letterMappings[1];
+    } else if (letter == 'o') {
+        letterMapping = letterMappings[2];
+    } else if (letter == 'P') {
+        letterMapping = letterMappings[3];
+    } else if (letter == 'F') {
+        letterMapping = letterMappings[4];
+    } else if (letter == 'E') {
+        letterMapping = letterMappings[5];
+    } else if (letter == 'I') {
+        letterMapping = letterMappings[6];
+    } else if (letter == 'L') {
+        letterMapping = letterMappings[7];
+    } else {
+        // Letter is not supported, display character - instead an empty display
+        letterMapping = letterMappings[8];
+    }
+
+    for (int pin: letterMapping) {
         digitalWrite(pin, LOW);
     }
 }
