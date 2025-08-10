@@ -14,7 +14,7 @@ RFID and door sensor module is complete on breadboards.
 ## RFID-RC522 module is visualized as an 8-pin header in the sketch.
  - SDA is the yellow wire connected to the ESP32 pin D5
  - SCK is the white wire connected to the ESP32 pin D18
- - MOSI is the green wire connected to the ESP32 pin D22
+ - MOSI is the green wire connected to the ESP32 pin D23
  - MISO is the blue wire connected to the ESP32 pin D19
  - IRQ is not connected
  - GND is the black wire connected to ESP32 GND pin through the breadboard
