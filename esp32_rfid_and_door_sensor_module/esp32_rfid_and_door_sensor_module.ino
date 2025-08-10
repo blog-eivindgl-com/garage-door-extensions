@@ -238,7 +238,7 @@ void ReadFileOfValidRfidValues() {
   file.close();
 }
 
-void FeedbackForGrantedAccess() {
+void AccessGranted() {
   digitalWrite(BlueLedPin, LOW);
   digitalWrite(GreenLedPin, HIGH);
   digitalWrite(BeepPin, HIGH);   // set the Buzzer on
