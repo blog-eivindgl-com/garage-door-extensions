@@ -1,9 +1,10 @@
 ###
 # Garage Door Extensions Backend API Tests
 # Base URL: http://localhost:5035
+# Server: http://172.16.2.121:5035
 ###
 
-@baseUrl = http://localhost:5035
+@baseUrl = http://172.16.2.121:5035
 @apiPath = /api/dooropenings
 
 ### Get Door Openings Today
