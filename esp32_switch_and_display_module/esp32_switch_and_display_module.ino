@@ -19,6 +19,8 @@ int dayCounter = 0;
 int weekCounter = 0;
 int monthCounter = 0;
 int currentSelectorValue = -1;
+unsigned long lastUpdateDisplayTime = 0;
+volatile bool isDisplayOn = false;
 volatile bool buttonState = false;
 volatile bool buttonStateChanged = false;
 volatile bool openDoorState = false;
@@ -61,7 +63,11 @@ void IRAM_ATTR handleButtonInterrupt() {
 
 void checkButtonState() {
   if (buttonStateChanged && buttonState) {
-    cycleSelector();
+    if (isDisplayOn) {
+      cycleSelector();
+    } else {
+      turnOnDisplay();
+    }
     buttonStateChanged = false;
   }
 }
@@ -105,6 +111,49 @@ void cycleDisplayDigit() {
   Serial.printf("Updating display to digit %d\n", currentDisplayDigit);
 }*/
 
+void turnOnDisplay() {
+  // Update the display digit based on the current selector value
+  switch (currentSelectorValue) {
+    case 0:  // Day
+      currentDisplayDigit = dayCounter;
+      Serial.println("Day view");
+      digitalWrite(DayLedPin, HIGH); // Turn on day LED
+      break;
+    case 1:  // Week
+      currentDisplayDigit = weekCounter;
+      Serial.println("Week view");
+      digitalWrite(WeekLedPin, HIGH); // Turn on week LED
+      break;
+    case 2:  // Month
+      currentDisplayDigit = monthCounter;
+      Serial.println("Month view");
+      digitalWrite(MonthLedPin, HIGH); // Turn on month LED
+      break;
+    default:
+      currentDisplayDigit = dayCounter; // Default to day counter if something is wrong
+      Serial.println("Unknown selector value");
+      break;
+  }
+
+  // Turn on the display by setting isDisplayOn to true
+  Serial.println("Turning on display...");
+  printLocalTime();
+  isDisplayOn = true;
+  lastUpdateDisplayTime = millis();
+}
+
+void turnOffDisplay() {
+  // Turn off all LEDs
+  digitalWrite(DayLedPin, LOW);
+  digitalWrite(WeekLedPin, LOW);
+  digitalWrite(MonthLedPin, LOW);
+
+  // Turn off the display by setting isDisplayOn to false
+  Serial.println("Tuning off display...");
+  printLocalTime();
+  isDisplayOn = false;
+}
+
 void cycleSelector() {
   // Turn off all LEDs before cycling
   digitalWrite(DayLedPin, LOW);
@@ -115,20 +164,16 @@ void cycleSelector() {
   switch (currentSelectorValue) {
     case 0:  // Day
       currentSelectorValue = 1;  // Move to next selector value, representing week
-      currentDisplayDigit = weekCounter;  // Update display to week counter
-      digitalWrite(WeekLedPin, HIGH); // Turn on week LED
       break;
     case 1:  // Week
       currentSelectorValue = 2;  // Move to next selector value, representing month
-      currentDisplayDigit = monthCounter;  // Update display to month counter
-      digitalWrite(MonthLedPin, HIGH); // Turn on month LED
       break;
     default:  // Month (or something unknown)
       currentSelectorValue = 0;  // Move to next selector value, representing day
-      currentDisplayDigit = dayCounter;  // Update display to day counter
-      digitalWrite(DayLedPin, HIGH); // Turn on day LED
       break;
   }
+
+  turnOnDisplay();
 }
 
 void queryCounter() {
@@ -278,6 +323,8 @@ void incomingMqttMessage(char *topic, uint8_t *message, unsigned int length) {
         currentDisplayDigit = monthCounter;
         break;
     }
+
+    turnOnDisplay(); // Ensure display is on after update
     
     Serial.printf("Updated counters - Today: %d, Week: %d, Month: %d\n", 
                   dayCounter, weekCounter, monthCounter);
@@ -413,8 +460,16 @@ void loop() {
       // Display text StoP instead of the normal number
       display.updateDisplay(-1);
     } else {
-      // Display the normal number
-      display.updateDisplay(currentDisplayDigit);
+      if (isDisplayOn && millis() - lastUpdateDisplayTime >= 60000) {
+        // Turn off display after 60 seconds of inactivity
+        turnOffDisplay();
+      } else if (isDisplayOn) {
+        // Display the normal number
+        display.updateDisplay(currentDisplayDigit);
+      } else {
+        // Don't display anything
+        display.clearDisplay();
+      }
     }
     
     lastUpdateTime = millis();  // Reset timing
