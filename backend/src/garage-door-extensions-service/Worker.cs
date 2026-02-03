@@ -36,6 +36,8 @@ public class Worker : BackgroundService
     private DateTime? _lastAlertCheck;
     private DateTime? _lastValidRfidCardsCheck;
     private long _alertSentForDoorOpenedAt = 0; // Timestamp of the time that the door was opened for the last alert sent. Used to prevent multiple alerts for the same door open event.
+    private bool _disveryMessagePublished = false;
+    private string? _lastPublishedErrorState = null;  // Tracks the last published error state to avoid redundant messages.
     private bool disposed = false;
 
     public Worker(IOptions<MqttClientOptions> mqttClientOptions, IOptions<AlertOptions> alertOptions, IHttpClientFactory httpClientFactory, ILogger<Worker> logger)
@@ -86,7 +88,10 @@ public class Worker : BackgroundService
             // Connect to the MQTT broker and keep the connection alive
             await ConnectAndKeepAliveAsync(stoppingToken);
 
-            // Publish MQTT message for failure when the garage door i not closed after a certain time
+            // Publish MQTT discovery message as an error sensor for Home Assistant once
+            await PublishDiscoveryMessageOnce(stoppingToken);
+
+            // Publish MQTT message for failure when the garage door isn't closed after a certain time
             await AlertOnDoorNotClosedAsync(stoppingToken);
 
             // At midnight, compare valid RFID cards and possibly update doors
@@ -103,7 +108,7 @@ public class Worker : BackgroundService
         // Ensure the MQTT client is disposed when the service stops
         Dispose();
     }
-    
+
     private async Task HandleIncomingMessageAsync(MqttApplicationMessageReceivedEventArgs e)
     {
         try
@@ -348,7 +353,40 @@ public class Worker : BackgroundService
             _logger.LogError(ex, $"An error occurred while connecting to the MQTT broker. {ex.Message}");
         }
     }
-    
+
+    private async Task PublishDiscoveryMessageOnce(CancellationToken stoppingToken)
+    {
+        try
+        {
+            if (_disveryMessagePublished)
+            {
+                return;
+            }
+            string discoveryMessage = "{" +
+                "\"name\": \"Garage Door Error\"," +
+                "\"unique_id\": \"garage_door_error_sensor\"," +
+                "\"state_topic\": \"door/error\"," +
+                "\"payload_on\": \"ERROR\"," +
+                "\"payload_off\": \"OK\"," +
+                "\"device_class\": \"problem\"," +
+                "\"icon\": \"mdi:alert-circle\"" +
+              "}";
+            var message = new MqttApplicationMessageBuilder()
+                .WithTopic("homeassistant/binary_sensor/garage_door/error/config")
+                .WithPayload(discoveryMessage)
+                .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
+                .WithRetainFlag(true)
+                .Build();
+            await _mqttClient.PublishAsync(message, stoppingToken);
+            _disveryMessagePublished = true;
+            _logger.LogInformation("Published MQTT discovery message for garage door error sensor.");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, $"An error occured while publishing discovery message. {ex.Message}");
+        }
+    }
+
     private async Task UpdateDisplayCounter(CancellationToken stoppingToken)
     {
         try
@@ -420,6 +458,7 @@ public class Worker : BackgroundService
             // If the door was opened after it was closed, we consider it open
             if (long.TryParse(lastOpened, out long lastOpenedTimestamp) && long.TryParse(lastClosed, out long lastClosedTimestamp) && lastClosedTimestamp > lastOpenedTimestamp)
             {
+                await PublishOkStateIfNeeded();
                 return; // No alert needed, door is closed
             }
 
@@ -437,6 +476,8 @@ public class Worker : BackgroundService
             if (int.TryParse(openDuration, out int duration) && duration < _alertOptions.Value.GarageDoorOpenTimeoutSeconds)
             {
                 _logger.LogInformation($"Garage door has been open for {duration} seconds, which is less than the configured timeout of {_alertOptions.Value.GarageDoorOpenTimeoutSeconds} seconds.");
+                await PublishOkStateIfNeeded();
+
                 return; // No alert needed
             }
 
@@ -468,6 +509,31 @@ public class Worker : BackgroundService
                 .Build();
 
             await _mqttClient.PublishAsync(alertMessage, stoppingToken);
+
+            // Publish an error state to the Home Assistant sensor
+            var errorStateMessage = new MqttApplicationMessageBuilder()
+                .WithTopic("door/error")
+                .WithPayload("ERROR")
+                .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
+                .Build();
+            await _mqttClient.PublishAsync(errorStateMessage, stoppingToken);
+            _lastPublishedErrorState = "ERROR";
+        }
+    }
+
+    private async Task PublishOkStateIfNeeded()
+    {
+        if (_lastPublishedErrorState != "OK")
+        {
+            _logger.LogInformation("Publishing OK state to Home Assistant sensor.");
+            // Publish an OK state to the Home Assistant sensor
+            var okStateMessage = new MqttApplicationMessageBuilder()
+                .WithTopic("door/error")
+                .WithPayload("OK")
+                .WithQualityOfServiceLevel(MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce)
+                .Build();
+            await _mqttClient.PublishAsync(okStateMessage);
+            _lastPublishedErrorState = "OK";
         }
     }
 
