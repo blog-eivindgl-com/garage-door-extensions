@@ -27,6 +27,7 @@ volatile bool openDoorState = false;
 volatile bool openDoorStateChanged = false;
 volatile bool emergencyStopState = false;
 volatile bool emergencyStopStateChanged = false;
+volatile bool errorState = false;
 
 const DigitPins digitPins = {
   .onesDigit = 5,
@@ -220,9 +221,6 @@ void reconnectMqttBroker() {
     // Attempt to connect
     if (mqttClient.connect("GarageDoorDisplay", mqtt_user, mqtt_password)) {
       Serial.printf("connected to %s\n", mqttServer);
-      // Subscribe to topics
-      mqttClient.subscribe("garageDoor/display");
-      mqttClient.subscribe("garageDoor/alert");
     } else {
       Serial.print("failed, rc=");
       Serial.print(mqttClient.state());
@@ -230,8 +228,24 @@ void reconnectMqttBroker() {
       delay(2000);
     }
   }
+
+  subscribeToMqttTopics();
 }
 
+void subscribeToMqttTopics() {
+  if (mqttClient.subscribe("garageDoor/display")) {
+    Serial.println("Subscribed to topic: garageDoor/display");
+  } else {
+    Serial.println("Failed to subscribe to display topic!");
+  }
+
+  // TODO: Change this to Home Assistant boolean sensor style
+  if (mqttClient.subscribe("garageDoor/alert")) {
+    Serial.println("Subscribed to topic: garageDoor/alert");
+  } else {
+    Serial.println("Failed to subscribe to alert topic!");
+  }
+}
 
 void printLocalTime() {
   struct tm timeinfo;
@@ -330,6 +344,14 @@ void incomingMqttMessage(char *topic, uint8_t *message, unsigned int length) {
                   dayCounter, weekCounter, monthCounter);
     /*Serial.printf("Last opened: %lu, Last closed: %lu, Duration: %d seconds\n", 
                   lastOpened, lastClosed, openDuration);*/
+  } else if (strcmp(topic, "garageDoor/errorState") == 0) {
+    Serial.println("Door is in error state");
+    errorState = true;
+    turnOnDisplay();  // Ensure display turns on to display error state
+  } else if (strcmp(topic, "garageDoor/okState") == 0) {
+    Serial.println("Door is in OK state");
+    errorState = false;
+    turnOnDisplay(); // Ensure display turns on to display counter as normal
   }
 }
 
@@ -459,6 +481,9 @@ void loop() {
     if (emergencyStopState) {
       // Display text StoP instead of the normal number
       display.updateDisplay(-1);
+    } else if (errorState) {
+      // Display text FEIL instead of the normal number
+      display.updateDisplay(-2);
     } else {
       if (isDisplayOn && millis() - lastUpdateDisplayTime >= 60000) {
         // Turn off display after 60 seconds of inactivity
