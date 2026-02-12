@@ -212,13 +212,16 @@ void checkOpenDoorState() {
   }
 }
 
-void reconnectMqttBroker() {
-  // Loop until we're reconnected
-  while (!mqttClient.connected()) {
+void ensureMqttBrokerConnected() {
+  // Reconnect if not connected
+  if (!mqttClient.connected()) {
+    display.updateDisplay(-3);
+    turnOnDisplay();
     Serial.printf("Connecting to %s...\n", mqttServer);
     
     // Attempt to connect
     if (mqttClient.connect("GarageDoorDisplay", mqtt_user, mqtt_password)) {
+      display.clearDisplay();
       Serial.printf("connected to %s\n", mqttServer);
       // Subscribe to topics
       mqttClient.subscribe("garageDoor/display");
@@ -226,12 +229,34 @@ void reconnectMqttBroker() {
     } else {
       Serial.print("failed, rc=");
       Serial.print(mqttClient.state());
-      Serial.println(" try again in 2 seconds");
-      delay(2000);
+      Serial.println();
     }
   }
 }
 
+void ensureWifiConnected() {
+  if (WiFi.status() != WL_CONNECTED) { 
+    display.updateDisplay(-3);
+    turnOnDisplay();
+    Serial.println("WiFi disconnected! Reconnecting..."); 
+    WiFi.disconnect(); 
+    WiFi.begin(wifi_ssid, wifi_password); 
+    unsigned long startAttemptTime = millis();
+    
+    // Try for up to 10 seconds 
+    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 10000) { 
+      delay(250); 
+      Serial.print("."); 
+    } 
+    
+    if (WiFi.status() == WL_CONNECTED) { 
+      display.clearDisplay();
+      Serial.println("WiFi reconnected"); 
+    } else { 
+      Serial.println("WiFi reconnect failed"); 
+    } 
+  }
+}
 
 void printLocalTime() {
   struct tm timeinfo;
@@ -396,8 +421,10 @@ void setup() {
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
+    display.updateDisplay(-3);
   }
   Serial.println(" CONNECTED");
+  display.clearDisplay();
 
   // set notification call-back function
   sntp_set_time_sync_notification_cb(timeavailable);
@@ -420,12 +447,17 @@ void setup() {
   mqttClient.setServer(mqttServer, 1883);
   mqttClient.setCallback(incomingMqttMessage);
 
-  if (!mqttClient.connected()) {
-    reconnectMqttBroker();
+  while (!mqttClient.connected()) {
+    ensureWifiConnected();
+    ensureMqttBrokerConnected();
   }
 
+  if (mqttClient.connected()) {
   // Register this device as a sensor for the emergency stop button in Home Assistant
   publishDiscoveryMqttMessage();
+  } else {
+    Serial.println("MQTT not connected - cannot publish discovery message");
+  }
 
   Serial.println("Query backend for current state of the garage door counters...");
   queryCounter();
@@ -436,9 +468,9 @@ void loop() {
   static unsigned long lastCheckedButtonState = 0;
   static unsigned long lastCheckedOpenDoorState = 0;
 
-  if (!mqttClient.connected()) {
-    reconnectMqttBroker();
-  }
+  // Reconnect both WiFi and MQTT if connection is broken
+  ensureWifiConnected();
+  ensureMqttBrokerConnected();
 
   mqttClient.loop(); // Process incoming MQTT messages
 

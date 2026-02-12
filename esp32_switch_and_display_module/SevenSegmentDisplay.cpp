@@ -57,6 +57,9 @@ void SevenSegmentDisplay::updateDisplay(int number) {
     } else if (number == -2) {
         // -2 should display text FEIL (Norwegian for error) when door is open for very long and the emergency stop button is not held
         displayText("FEIL");
+    } else if (number == -3) {
+        // -3 should display four ---- to indicate something wrong with the device, typically used when connection to WiFi or MQTT is broken
+        displayText("----");
     } else {
         // display numbers 0-9999 using common logic for numbers
         displayNumber(number);
