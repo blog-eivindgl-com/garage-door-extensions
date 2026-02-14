@@ -66,7 +66,7 @@ void checkButtonState() {
     if (isDisplayOn) {
       cycleSelector();
     } else {
-      turnOnDisplay();
+      displayCounterView();
     }
     buttonStateChanged = false;
   }
@@ -111,7 +111,7 @@ void cycleDisplayDigit() {
   Serial.printf("Updating display to digit %d\n", currentDisplayDigit);
 }*/
 
-void turnOnDisplay() {
+void displayCounterView() {
   // Update the display digit based on the current selector value
   switch (currentSelectorValue) {
     case 0:  // Day
@@ -135,6 +135,10 @@ void turnOnDisplay() {
       break;
   }
 
+  turnOnDisplay();
+}
+
+void turnOnDisplay() {
   // Turn on the display by setting isDisplayOn to true
   Serial.println("Turning on display...");
   printLocalTime();
@@ -173,7 +177,7 @@ void cycleSelector() {
       break;
   }
 
-  turnOnDisplay();
+  displayCounterView();
 }
 
 void queryCounter() {
@@ -215,13 +219,13 @@ void checkOpenDoorState() {
 void ensureMqttBrokerConnected() {
   // Reconnect if not connected
   if (!mqttClient.connected()) {
-    display.updateDisplay(-3);
+    currentDisplayDigit = -3;
     turnOnDisplay();
     Serial.printf("Connecting to %s...\n", mqttServer);
     
     // Attempt to connect
     if (mqttClient.connect("GarageDoorDisplay", mqtt_user, mqtt_password)) {
-      display.clearDisplay();
+      displayCounterView();
       Serial.printf("connected to %s\n", mqttServer);
       // Subscribe to topics
       mqttClient.subscribe("garageDoor/display");
@@ -236,7 +240,7 @@ void ensureMqttBrokerConnected() {
 
 void ensureWifiConnected() {
   if (WiFi.status() != WL_CONNECTED) { 
-    display.updateDisplay(-3);
+    currentDisplayDigit = -3;
     turnOnDisplay();
     Serial.println("WiFi disconnected! Reconnecting..."); 
     WiFi.disconnect(); 
@@ -250,7 +254,7 @@ void ensureWifiConnected() {
     } 
     
     if (WiFi.status() == WL_CONNECTED) { 
-      display.clearDisplay();
+      displayCounterView();
       Serial.println("WiFi reconnected"); 
     } else { 
       Serial.println("WiFi reconnect failed"); 
@@ -349,7 +353,7 @@ void incomingMqttMessage(char *topic, uint8_t *message, unsigned int length) {
         break;
     }
 
-    turnOnDisplay(); // Ensure display is on after update
+    displayCounterView(); // Ensure display is on after update
     
     Serial.printf("Updated counters - Today: %d, Week: %d, Month: %d\n", 
                   dayCounter, weekCounter, monthCounter);
