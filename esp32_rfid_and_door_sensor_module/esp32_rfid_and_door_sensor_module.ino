@@ -26,6 +26,9 @@
 #include "esp_sntp.h"
 #include "parameters.h"
 
+const int StatusLedPin = 2;
+unsigned long statusLedOnTime = 0;
+
 const int BeepPin = 13;
 const int BlueLedPin = 26;
 const int GreenLedPin = 27;
@@ -37,6 +40,7 @@ std::atomic<bool> doorSensorStateChanged = false;
 unsigned long doorSensorChangedTime = 0;
 std::vector<String> validRfidValues = { };
 String updateValidRfidCardsTopic = "garageDoor/updateValidRfidCards/" + String(doorId);  // Provide doorId as a const *char to identify the door in MQTT messages in parameters.h
+unsigned long rfidReadTime = 0;
 
 // Learn more about using SPI/I2C or check the pin assigment for your board: https://github.com/OSSLibraries/Arduino_MFRC522v2#pin-layout
 MFRC522DriverPinSimple ss_pin(5);
@@ -67,16 +71,16 @@ void checkDoorSensorState() {
   if (doorSensorStateChanged && strcmp(doorSensorState, "closed") == 0) {
     Serial.println("Door is closed");
     // Message for ESP32 display module
-    mqttClient.publish("garageDoor/doorStateChanged", "closed");
+    //mqttClient.publish("garageDoor/doorStateChanged", "closed"); // TODO: Uncomment after testing
     // Message for Home Assitant
-    mqttClient.publish("door/sensor", "CLOSED");
+    //mqttClient.publish("door/sensor", "CLOSED"); // TODO: Uncomment after testing
     doorSensorStateChanged = false;
   } else if (doorSensorStateChanged && strcmp(doorSensorState, "open") == 0) {
     Serial.println("Door is opening");
     // Message for ESP32 display module
-    mqttClient.publish("garageDoor/doorStateChanged", "opening");
+    //mqttClient.publish("garageDoor/doorStateChanged", "opening"); // TODO: Uncomment after testing
     // Message for Home Assitant
-    mqttClient.publish("door/sensor", "OPEN");
+    //mqttClient.publish("door/sensor", "OPEN");  // TODO: Uncomment after testing
     doorSensorStateChanged = false;
   }
 }
@@ -148,20 +152,51 @@ void publishDiscoveryMqttMessage() {
   mqttClient.publish("homeassistant/binary_sensor/garage_door_sensor/config", discoveryMessage.c_str(), true); // true means the message is retained when HA is restarted
 }
 
-void reconnectMqttBroker() {
-  while (!mqttClient.connected()) {
-    Serial.printf("Connecting to %s...\n", mqttServer);
+void turnOnStatusLed() {
+  // Turn the status LED on and record time to automatically turn it off again after a while
+  digitalWrite(StatusLedPin, HIGH);
+  statusLedOnTime = millis();
+}
 
-    if (mqttClient.connect("GarageDoorSensor", mqtt_user, mqtt_password)) {
+void turnOffStatusLed() {
+  digitalWrite(StatusLedPin, LOW);
+}
+
+void ensureWifiConnected() {
+  if (WiFi.status() != WL_CONNECTED) { 
+    Serial.println("WiFi disconnected! Reconnecting..."); 
+    WiFi.disconnect(); 
+    WiFi.begin(wifi_ssid, wifi_password); 
+    unsigned long startAttemptTime = millis();
+    
+    // Try for up to 10 seconds 
+    while (WiFi.status() != WL_CONNECTED && millis() - startAttemptTime < 10000) { 
+      delay(250); 
+      Serial.print("."); 
+    } 
+    
+    if (WiFi.status() == WL_CONNECTED) { 
+      Serial.println("WiFi reconnected"); 
+    } else { 
+      Serial.println("WiFi reconnect failed"); 
+    } 
+  }
+}
+
+void ensureMqttBrokerConnected() {
+  // Reconnect if not connected
+  if (!mqttClient.connected()) {
+    Serial.printf("Connecting to %s...\n", mqttServer);
+    
+    // Attempt to connect
+    if (mqttClient.connect("TestDevice", mqtt_user, mqtt_password)) {  // TODO: Change name to "GarageDoorSensor" after testing
       Serial.printf("connected to %s\n", mqttServer);
     } else {
-      Serial.print("Failed, rc=");
+      Serial.print("failed, rc=");
       Serial.println(mqttClient.state());
       delay(2000);
     }
   }
-
-  subscribeToMqttTopics();
 }
 
 void subscribeToMqttTopics() {
@@ -285,6 +320,10 @@ void RunStartupSequence() {
 
 void setup() {
   Serial.begin(115200);
+
+  // Turn on status LED until setup is successfully executed
+  pinMode(StatusLedPin, OUTPUT);
+  digitalWrite(StatusLedPin, HIGH);
   
   // Setup magnet sensor pin for interrupt
   Serial.println("Assigning magnet sensor pin...");
@@ -304,6 +343,7 @@ void setup() {
   pinMode(GreenLedPin, OUTPUT);
   digitalWrite(GreenLedPin, LOW);
 
+  Serial.println("Initializing MFRC522 board for RFID...");
   mfrc522.PCD_Init();    // Init MFRC522 board.
   MFRC522Debug::PCD_DumpVersionToSerial(mfrc522, Serial);	// Show details of PCD - MFRC522 Card Reader details.
   Serial.println(F("Scan PICC to see UID, SAK, type, and data blocks..."));
@@ -371,22 +411,36 @@ void setup() {
   // Connect to MQTT broker
   mqttClient.setServer(mqttServer, 1883);
   mqttClient.setCallback(incomingMqttMessage);
+  mqttClient.setBufferSize(512);  // default 256 bytes is too small for the sensor discovery payloads
 
   if (!mqttClient.connected()) {
-    reconnectMqttBroker();
+    ensureWifiConnected();
+    ensureMqttBrokerConnected();
   }
 
-  // Register this device as a door sensor in Home Assistant
-  publishDiscoveryMqttMessage();
+  if (mqttClient.connected()) {
+    // Register this device as a door sensor in Home Assistant
+    publishDiscoveryMqttMessage();
+    subscribeToMqttTopics();
+  } else {
+    Serial.println("MQTT not connected - cannot publish discovery message");
+  }
 
   // Run sequence of LEDs and beep to verify that components are OK
   RunStartupSequence();
+
+  // Turn off status LED to indicate setup completed
+  digitalWrite(StatusLedPin, LOW);
 }
 
 void loop() {
-  if (!mqttClient.connected()) {
-    reconnectMqttBroker();
+  if (millis() - statusLedOnTime >= 1000) {
+    turnOffStatusLed();
   }
+
+  // Reconnect both WiFi and MQTT if connection is broken
+  ensureWifiConnected();
+  ensureMqttBrokerConnected();
 
   mqttClient.loop(); // Process incoming MQTT messages
 
@@ -404,27 +458,29 @@ void loop() {
     return;
   }
 
-  Serial.print("Card UID: ");
-  MFRC522Debug::PrintUID(Serial, (mfrc522.uid));
-  Serial.println();
+  // Read cards with 3s delay between each read
+  if (millis() - rfidReadTime > 3000) {
+    rfidReadTime = millis();
+    Serial.print("Card UID: ");
+    MFRC522Debug::PrintUID(Serial, (mfrc522.uid));
+    Serial.println();
 
-  // Save the UID on a String variable
-  String uidString = "";
-  for (byte i = 0; i < mfrc522.uid.size; i++) {
-    if (mfrc522.uid.uidByte[i] < 0x10) {
-      uidString += "0"; 
+    // Save the UID on a String variable
+    String uidString = "";
+    for (byte i = 0; i < mfrc522.uid.size; i++) {
+      if (mfrc522.uid.uidByte[i] < 0x10) {
+        uidString += "0"; 
+      }
+      uidString += String(mfrc522.uid.uidByte[i], HEX);
     }
-    uidString += String(mfrc522.uid.uidByte[i], HEX);
+    
+    if (ValidateRfid(uidString)) {
+      AccessGranted();
+      Serial.printf("Opened door for RFID %s\n", uidString);
+    } else {
+      Serial.printf("WARNING: %s is NOT valid for this door\n", uidString);
+      mqttClient.publish("garageDoor/invalidRfid", uidString.c_str());
+      Serial.println("MQTT message about invalid RFID sent.");
+    }
   }
-  
-  if (ValidateRfid(uidString)) {
-    AccessGranted();
-    Serial.printf("Opened door for RFID %s\n", uidString);
-  } else {
-    Serial.printf("WARNING: %s is NOT valid for this door\n", uidString);
-    mqttClient.publish("garageDoor/invalidRfid", uidString.c_str());
-    Serial.println("MQTT message about invalid RFID sent.");
-  }
-
-  delay(100);
 }
