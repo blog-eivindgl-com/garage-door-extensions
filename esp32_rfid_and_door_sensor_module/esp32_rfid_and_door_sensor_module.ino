@@ -44,7 +44,8 @@ unsigned long rfidReadTime = 0;
 
 // Learn more about using SPI/I2C or check the pin assigment for your board: https://github.com/OSSLibraries/Arduino_MFRC522v2#pin-layout
 MFRC522DriverPinSimple ss_pin(5);
-MFRC522DriverSPI driver{ss_pin}; // Create SPI driver
+SPISettings spiSettings{100000, MSBFIRST, SPI_MODE0}; // 100 kHz for long cable run
+MFRC522DriverSPI driver{ss_pin, SPI, spiSettings};     // Create SPI driver
 MFRC522 mfrc522{driver};         // Create MFRC522 instance
 
 WiFiClient wifiClient;
