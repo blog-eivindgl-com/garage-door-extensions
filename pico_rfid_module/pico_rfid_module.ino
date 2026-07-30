@@ -76,8 +76,10 @@ String uidToHex(const MFRC522::Uid &uid) {
 
 void setup() {
   Serial.begin(115200);               // USB serial, for debugging via USB cable
+  Serial.println("Initialize UART with ESP32 controller");
   Serial1.begin(UART_TO_ESP32_BAUD);  // Hardware UART to the ESP32 controller
 
+  Serial.println("Initialize RFID-RC522 sensor");
   // driver.init() (called from PCD_Init()) handles SPI.begin() and the CS
   // pin itself, so nothing else needs to be set up here.
   mfrc522.PCD_Init();
@@ -89,11 +91,11 @@ void setup() {
 
 void loop() {
   if (!mfrc522.PICC_IsNewCardPresent()) {
-    return;
+   return;
   }
 
   if (!mfrc522.PICC_ReadCardSerial()) {
-    return;
+   return;
   }
 
   String uid = uidToHex(mfrc522.uid);
