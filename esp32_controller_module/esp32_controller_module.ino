@@ -61,7 +61,6 @@ std::atomic<bool> doorSensorStateChanged = false;
 unsigned long doorSensorChangedTime = 0;
 std::vector<String> validRfidValues = { };
 String updateValidRfidCardsTopic = "garageDoor/updateValidRfidCards/" + String(doorId);  // Provide doorId as a const *char to identify the door in MQTT messages in parameters.h
-unsigned long rfidReadTime = 0;
 
 WiFiClient wifiClient;
 PubSubClient mqttClient(wifiClient);  // MQTT
@@ -323,13 +322,6 @@ void handleRfidUart() {
 }
 
 void handleRfidUid(String uid) {
-  // Ignore repeat reads within 3s of the previous one, mirroring the
-  // original module's behavior when a card was left sitting on the reader.
-  if (millis() - rfidReadTime <= 3000) {
-    return;
-  }
-  rfidReadTime = millis();
-
   Serial.printf("Card UID received: %s\n", uid);
 
   if (ValidateRfid(uid)) {
